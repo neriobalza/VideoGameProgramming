@@ -9,6 +9,7 @@ This file contains the class PlayState.
 """
 
 import random
+import math
 
 import pygame
 
@@ -22,6 +23,7 @@ from src.rendering import render_table
 class PlayState(BaseState):
     def enter(self, pong) -> None:
         self.pong = pong
+        settings.SOUNDS["score"].set_volume(0.25)
 
     def update(self, dt: float) -> None:
         pong = self.pong
@@ -58,11 +60,19 @@ class PlayState(BaseState):
             pong.ball.x = player1_rect.right
             pong.ball.vx *= -1.03
             self._randomize_vy()
+            
         elif ball_rect.colliderect(player2_rect):
             settings.SOUNDS["paddle_hit"].play()
             pong.ball.x = player2_rect.left - pong.ball.width
             pong.ball.vx *= -1.03
             self._randomize_vy()
+
+        # Player 1 - AI
+        if -1 <= player1_rect.centery - ball_rect.centery <= 1:
+            pong.player1.vy = 0
+        else:
+            pong.player1.vy = -settings.PADDLE_SPEED if ball_rect.centery <= player1_rect.centery else settings.PADDLE_SPEED
+
 
     def _randomize_vy(self) -> None:
         magnitude = random.randint(10, 149)
@@ -103,16 +113,7 @@ class PlayState(BaseState):
     def on_input(self, input_id: str, input_data: InputData) -> None:
         pong = self.pong
 
-        if input_id in ("p1_up", "p1_down"):
-            if input_data.pressed:
-                pong.player1.vy = (
-                    -settings.PADDLE_SPEED if input_id == "p1_up" else settings.PADDLE_SPEED
-                )
-            elif input_data.released:
-                sign = -1 if input_id == "p1_up" else 1
-                if pong.player1.vy == sign * settings.PADDLE_SPEED:
-                    pong.player1.vy = 0
-        elif input_id in ("p2_up", "p2_down"):
+        if input_id in ("p2_up", "p2_down"):
             if input_data.pressed:
                 pong.player2.vy = (
                     -settings.PADDLE_SPEED if input_id == "p2_up" else settings.PADDLE_SPEED

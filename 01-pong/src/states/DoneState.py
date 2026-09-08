@@ -40,6 +40,7 @@ class DoneState(BaseState):
             settings.VIRTUAL_WIDTH / 2,
             settings.VIRTUAL_HEIGHT / 2,
             settings.COLOR_WHITE,
+            settings.COLOR_BACKGROUND,
             center=True,
         )
 
