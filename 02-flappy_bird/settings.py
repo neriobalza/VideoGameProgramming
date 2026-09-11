@@ -16,9 +16,23 @@ import pygame
 
 from gale import input_handler
 
+# Quit Game
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_ESCAPE, "quit")
+# Pause Game
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_TAB, "pause")
+# Move Up and Down
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_UP, "up")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_DOWN, "down")
+# Move Left and Right
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_LEFT, "left")  
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_a, "left")  
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RIGHT, "right")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_d, "right")
+# Confirm 
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RETURN, "confirm")
-input_handler.InputHandler.set_mouse_click_action(input_handler.MOUSE_BUTTON_1, "jump")
+# Jump
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_SPACE, "jump")
+# input_handler.InputHandler.set_mouse_click_action(input_handler.MOUSE_BUTTON_1, "jump")
 
 TITLE = "Flappy Bird"
 
