@@ -29,6 +29,7 @@ class FlappyBird(Game):
                 "pause": states.PauseState,
             }
         )
+        self.state_machine.best_score = 0
         self.state_machine.change("title")
 
     def update(self, dt: float) -> None:

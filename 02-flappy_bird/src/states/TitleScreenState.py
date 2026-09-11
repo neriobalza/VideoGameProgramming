@@ -47,6 +47,16 @@ class TitleScreenState(BaseState):
             center=True,
             shadowed=True,
         )
+        render_text(
+            surface,
+            f"Best score: {self.state_machine.best_score}",
+            settings.FONTS["medium"],
+            settings.VIRTUAL_WIDTH / 2,
+            3 * settings.VIRTUAL_HEIGHT / 4,
+            settings.COLOR_WHITE,
+            center=True,
+            shadowed=True,
+        )
 
     def on_input(self, input_id: str, input_data: InputData) -> None:
         if input_id == "confirm" and input_data.pressed:

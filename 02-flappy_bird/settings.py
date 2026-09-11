@@ -20,6 +20,7 @@ from gale import input_handler
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_ESCAPE, "quit")
 # Pause Game
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_TAB, "pause")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_p, "pause")
 # Move Up and Down
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_UP, "up")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_DOWN, "down")

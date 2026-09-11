@@ -22,16 +22,29 @@ from src.World import World
 
 
 class PlayingState(BaseState):
-    def enter(self, world: Optional[World] = None) -> None:
+    def enter(
+        self,
+        world: Optional[World] = None,
+        bird: Optional[Bird] = None,
+        score: int = 0,
+    ) -> None:
         self.world = world if world is not None else World()
         self.world.reset(True)
-        self.bird = Bird(
-            settings.VIRTUAL_WIDTH / 2 - settings.BIRD_WIDTH / 2,
-            settings.VIRTUAL_HEIGHT / 2 - settings.BIRD_HEIGHT / 2,
-            settings.BIRD_WIDTH,
-            settings.BIRD_HEIGHT,
+        self.bird = (
+            bird
+            if bird is not None
+            else Bird(
+                settings.VIRTUAL_WIDTH / 2 - settings.BIRD_WIDTH / 2,
+                settings.VIRTUAL_HEIGHT / 2 - settings.BIRD_HEIGHT / 2,
+                settings.BIRD_WIDTH,
+                settings.BIRD_HEIGHT,
+            )
         )
-        self.score = 0
+        self.score = score
+        self.state_machine.best_score = max(
+            self.state_machine.best_score,
+            self.score,
+        )
 
     def update(self, dt: float) -> None:
         self.bird.update(dt)
@@ -45,6 +58,10 @@ class PlayingState(BaseState):
 
         if self.world.update_scored(self.bird.get_rect()):
             self.score += 1
+            self.state_machine.best_score = max(
+                self.state_machine.best_score,
+                self.score,
+            )
             settings.SOUNDS["score"].play()
 
     def render(self, surface: pygame.Surface) -> None:
@@ -59,10 +76,27 @@ class PlayingState(BaseState):
             settings.COLOR_WHITE,
             shadowed=True,
         )
+        best_score_text = f"Best: {self.state_machine.best_score}"
+        render_text(
+            surface,
+            best_score_text,
+            settings.FONTS["flappy"],
+            settings.VIRTUAL_WIDTH
+            - settings.FONTS["flappy"].size(best_score_text)[0]
+            - 20,
+            10,
+            settings.COLOR_WHITE,
+            shadowed=True,
+        )
 
     def on_input(self, input_id: str, input_data: InputData) -> None:
         if input_data.pressed:
             if input_id == "jump":
                 self.bird.jump()
             elif input_id == "pause":
-                self.state_machine.change("pause", self.world, self.bird, self.score)
+                self.state_machine.change(
+                    "pause",
+                    world=self.world,
+                    bird=self.bird,
+                    score=self.score,
+                )
