@@ -25,15 +25,15 @@ input_handler.InputHandler.set_keyboard_action(input_handler.KEY_p, "pause")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_UP, "up")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_DOWN, "down")
 # Move Left and Right
-input_handler.InputHandler.set_keyboard_action(input_handler.KEY_LEFT, "left")  
-input_handler.InputHandler.set_keyboard_action(input_handler.KEY_a, "left")  
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_LEFT, "left")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_a, "left")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RIGHT, "right")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_d, "right")
-# Confirm 
+# Confirm
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RETURN, "confirm")
 # Jump
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_SPACE, "jump")
-# input_handler.InputHandler.set_mouse_click_action(input_handler.MOUSE_BUTTON_1, "jump")
+input_handler.InputHandler.set_mouse_click_action(input_handler.MOUSE_BUTTON_1, "jump")
 
 TITLE = "Flappy Bird"
 
@@ -69,8 +69,21 @@ BACK_SCROLL_SPEED = 50  # MAIN_SCROLL_SPEED / 2
 
 GRAVITY = 980
 JUMP_TAKEOFF_SPEED = GRAVITY / 6
+HARD_BIRD_HORIZONTAL_SPEED = 120
 
 TIME_TO_SPAWN_LOGS = 1.5
+HARD_MIN_LOG_SPAWN_DELAY = 0.95
+HARD_MAX_LOG_SPAWN_DELAY = 1.85
+HARD_MIN_LOG_GAP = 90
+HARD_MAX_LOG_GAP = 120
+HARD_MOVING_LOG_CHANCE = 0.4
+HARD_MOVING_LOG_SPEED = 55
+
+GHOST_POWER_UP_WIDTH = 34
+GHOST_POWER_UP_HEIGHT = 25
+GHOST_EFFECT_DURATION = 6.0
+HARD_MIN_POWER_UP_DELAY = 7.0
+HARD_MAX_POWER_UP_DELAY = 10.0
 
 MEDIUM_TEXT_SIZE = 18
 HUGE_TEXT_SIZE = 56
@@ -80,25 +93,54 @@ BASE_DIR = Path(__file__).parent
 
 TEXTURES = {
     "bird": pygame.image.load(BASE_DIR / "assets" / "graphics" / "bird.png"),
-    "background": pygame.image.load(BASE_DIR / "assets" / "graphics" / "background.png"),
+    "background": pygame.image.load(
+        BASE_DIR / "assets" / "graphics" / "background.png"
+    ),
     "ground": pygame.image.load(BASE_DIR / "assets" / "graphics" / "ground.png"),
     "log": pygame.image.load(BASE_DIR / "assets" / "graphics" / "log.png"),
+    "ghost": pygame.image.load(BASE_DIR / "assets" / "graphics" / "ghost.png"),
 }
 # The top log of every pair is the same image, flipped upside down.
 TEXTURES["log_inverted"] = pygame.transform.flip(TEXTURES["log"], False, True)
+TEXTURES["ghost_bird"] = pygame.transform.smoothscale(
+    TEXTURES["ghost"], (BIRD_WIDTH, BIRD_HEIGHT)
+)
+TEXTURES["ghost_power_up"] = pygame.transform.smoothscale(
+    TEXTURES["ghost"], (GHOST_POWER_UP_WIDTH, GHOST_POWER_UP_HEIGHT)
+)
 
 SOUNDS = {
     "jump": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "jump.wav"),
     "explosion": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "explosion.wav"),
     "hurt": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "hurt.wav"),
     "score": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "score.wav"),
+    "logs_hit": pygame.mixer.Sound(
+        BASE_DIR / "assets" / "sounds" / "logs_hit.wav"
+    ),
+    "power_up": pygame.mixer.Sound(
+        BASE_DIR / "assets" / "sounds" / "power_up.wav"
+    ),
 }
 
-pygame.mixer.music.load(BASE_DIR / "assets" / "sounds" / "marios_way.ogg")
+MUSIC_TRACKS = {
+    "normal": BASE_DIR / "assets" / "sounds" / "marios_way.ogg",
+    "ghost": BASE_DIR / "assets" / "sounds" / "ghost_theme.wav",
+}
+
+
+def play_music(track: str) -> None:
+    """Switch to a looping music track."""
+    pygame.mixer.music.load(MUSIC_TRACKS[track])
+    pygame.mixer.music.play(loops=-1)
+
 
 FONTS = {
-    "medium": pygame.font.Font(BASE_DIR / "assets" / "fonts" / "font.ttf", MEDIUM_TEXT_SIZE),
-    "huge": pygame.font.Font(BASE_DIR / "assets" / "fonts" / "font.ttf", HUGE_TEXT_SIZE),
+    "medium": pygame.font.Font(
+        BASE_DIR / "assets" / "fonts" / "font.ttf", MEDIUM_TEXT_SIZE
+    ),
+    "huge": pygame.font.Font(
+        BASE_DIR / "assets" / "fonts" / "font.ttf", HUGE_TEXT_SIZE
+    ),
     "flappy": pygame.font.Font(
         BASE_DIR / "assets" / "fonts" / "flappy.ttf", FLAPPY_TEXT_SIZE
     ),

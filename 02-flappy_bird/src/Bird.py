@@ -19,8 +19,14 @@ class Bird:
         self.y: float = y
         self.width: float = width
         self.height: float = height
+        self.vx: float = 0.0
         self.vy: float = 0.0
         self.jumping: bool = False
+        self.ghost_time_remaining: float = 0.0
+
+    @property
+    def is_ghost(self) -> bool:
+        return self.ghost_time_remaining > 0
 
     def get_rect(self) -> pygame.Rect:
         return pygame.Rect(round(self.x), round(self.y), self.width, self.height)
@@ -28,7 +34,27 @@ class Bird:
     def jump(self) -> None:
         self.jumping = True
 
+    def activate_ghost(self) -> None:
+        self.ghost_time_remaining = settings.GHOST_EFFECT_DURATION
+        settings.SOUNDS["power_up"].play()
+        settings.play_music("ghost")
+
+    def deactivate_ghost(self) -> None:
+        if not self.is_ghost:
+            return
+
+        self.ghost_time_remaining = 0.0
+        settings.play_music("normal")
+
+    def stop_horizontal_movement(self) -> None:
+        self.vx = 0.0
+
     def update(self, dt: float) -> None:
+        if self.is_ghost:
+            self.ghost_time_remaining = max(0.0, self.ghost_time_remaining - dt)
+            if not self.is_ghost:
+                settings.play_music("normal")
+
         self.vy += settings.GRAVITY * dt
 
         if self.jumping:
@@ -36,7 +62,14 @@ class Bird:
             self.vy = -settings.JUMP_TAKEOFF_SPEED
             self.jumping = False
 
+        self.x += self.vx * dt
+        self.x = max(0, min(self.x, settings.VIRTUAL_WIDTH - self.width))
         self.y += self.vy * dt
 
     def render(self, surface: pygame.Surface) -> None:
-        surface.blit(settings.TEXTURES["bird"], self.get_rect())
+        texture = (
+            settings.TEXTURES["ghost_bird"]
+            if self.is_ghost
+            else settings.TEXTURES["bird"]
+        )
+        surface.blit(texture, self.get_rect())

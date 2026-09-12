@@ -50,10 +50,20 @@ class PlayingState(BaseState):
         self.bird.update(dt)
         self.world.update(dt)
 
-        if self.world.collides(self.bird.get_rect()):
+        if self.world.collect_power_up(self.bird.get_rect()):
+            self.bird.activate_ghost()
+
+        if self.world.collides(
+            self.bird.get_rect(),
+            ignore_logs=self.bird.is_ghost,
+        ):
+            self.bird.deactivate_ghost()
             settings.SOUNDS["explosion"].play()
             settings.SOUNDS["hurt"].play()
-            self.state_machine.change("count_down")
+            self.state_machine.change(
+                "count_down",
+                World(strategy=self.world.strategy),
+            )
             return
 
         if self.world.update_scored(self.bird.get_rect()):
@@ -76,6 +86,15 @@ class PlayingState(BaseState):
             settings.COLOR_WHITE,
             shadowed=True,
         )
+        render_text(
+            surface,
+            self.world.strategy.name,
+            settings.FONTS["medium"],
+            20,
+            42,
+            settings.COLOR_WHITE,
+            shadowed=True,
+        )
         best_score_text = f"Best: {self.state_machine.best_score}"
         render_text(
             surface,
@@ -89,14 +108,34 @@ class PlayingState(BaseState):
             shadowed=True,
         )
 
+        if self.bird.is_ghost:
+            ghost_text = f"Ghost: {self.bird.ghost_time_remaining:.1f}s"
+            render_text(
+                surface,
+                ghost_text,
+                settings.FONTS["medium"],
+                settings.VIRTUAL_WIDTH
+                - settings.FONTS["medium"].size(ghost_text)[0]
+                - 20,
+                42,
+                settings.COLOR_WHITE,
+                shadowed=True,
+            )
+
     def on_input(self, input_id: str, input_data: InputData) -> None:
-        if input_data.pressed:
-            if input_id == "jump":
-                self.bird.jump()
-            elif input_id == "pause":
-                self.state_machine.change(
-                    "pause",
-                    world=self.world,
-                    bird=self.bird,
-                    score=self.score,
-                )
+        self.world.strategy.handle_horizontal_input(
+            self.bird,
+            input_id,
+            input_data,
+        )
+
+        if input_id == "jump" and input_data.pressed:
+            self.bird.jump()
+        elif input_id == "pause" and input_data.pressed:
+            self.bird.stop_horizontal_movement()
+            self.state_machine.change(
+                "pause",
+                world=self.world,
+                bird=self.bird,
+                score=self.score,
+            )

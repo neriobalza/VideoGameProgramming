@@ -20,7 +20,7 @@ from src import states
 
 class FlappyBird(Game):
     def init(self) -> None:
-        pygame.mixer.music.play(loops=-1)
+        settings.play_music("normal")
         self.state_machine = StateMachine(
             {
                 "title": states.TitleScreenState,
@@ -30,6 +30,7 @@ class FlappyBird(Game):
             }
         )
         self.state_machine.best_score = 0
+        self.state_machine.selected_mode = 0
         self.state_machine.change("title")
 
     def update(self, dt: float) -> None:

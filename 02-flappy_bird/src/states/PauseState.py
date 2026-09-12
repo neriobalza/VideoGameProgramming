@@ -24,6 +24,7 @@ class PauseState(BaseState):
         """Keep the live game objects untouched while the state is paused."""
         self.world = world
         self.bird = bird
+        self.bird.stop_horizontal_movement()
         self.score = score
         self.overlay = pygame.Surface(
             (settings.VIRTUAL_WIDTH, settings.VIRTUAL_HEIGHT), pygame.SRCALPHA
@@ -108,4 +109,5 @@ class PauseState(BaseState):
                 score=self.score,
             )
         elif input_id == "confirm":
+            self.bird.deactivate_ghost()
             self.state_machine.change("title")
