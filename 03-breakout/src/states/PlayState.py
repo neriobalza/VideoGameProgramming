@@ -36,6 +36,8 @@ class PlayState(BaseState):
             + settings.PADDLE_GROW_UP_POINTS * (self.paddle.size + 1) * self.level
         )
         self.powerups = params.get("powerups", [])
+        self.capture_time_remaining = params.get("capture_time_remaining", 0)
+        self.caught_balls = params.get("caught_balls", {})
 
         if not params.get("resume", False):
             self.balls[0].vx = random.randint(-80, 80)
@@ -44,10 +46,48 @@ class PlayState(BaseState):
 
         self.powerups_abstract_factory = AbstractFactory("src.powerups")
 
+    def activate_ball_capture(self) -> None:
+        self.capture_time_remaining = settings.CATCH_BALL_POWERUP_DURATION
+
+    def catch_ball(self, ball) -> None:
+        max_offset = max(0, self.paddle.width - ball.width)
+        offset = max(0, min(ball.x - self.paddle.x, max_offset))
+
+        ball.vx = 0
+        ball.vy = 0
+        self.caught_balls[ball] = offset
+        self.position_caught_ball(ball)
+
+    def position_caught_ball(self, ball) -> None:
+        offset = self.caught_balls.get(ball)
+
+        if offset is None:
+            return
+
+        max_offset = max(0, self.paddle.width - ball.width)
+        ball.x = self.paddle.x + min(offset, max_offset)
+        ball.y = self.paddle.y - ball.height
+
+    def launch_caught_balls(self) -> None:
+        for ball in self.caught_balls:
+            ball.vx = random.randint(-80, 80)
+            ball.vy = random.randint(-170, -100)
+
+        if self.caught_balls:
+            settings.SOUNDS["paddle_hit"].stop()
+            settings.SOUNDS["paddle_hit"].play()
+
+        self.caught_balls = {}
+
     def update(self, dt: float) -> None:
+        self.capture_time_remaining = max(0, self.capture_time_remaining - max(0, dt))
         self.paddle.update(dt)
 
         for ball in self.balls:
+            if ball in self.caught_balls:
+                self.position_caught_ball(ball)
+                continue
+
             ball.update(dt)
             ball.solve_world_boundaries()
 
@@ -55,6 +95,11 @@ class PlayState(BaseState):
             if ball.collides(self.paddle):
                 settings.SOUNDS["paddle_hit"].stop()
                 settings.SOUNDS["paddle_hit"].play()
+
+                if self.capture_time_remaining > 0:
+                    self.catch_ball(ball)
+                    continue
+
                 ball.rebound(self.paddle)
                 ball.push(self.paddle)
 
@@ -86,17 +131,23 @@ class PlayState(BaseState):
                 )
                 self.paddle.inc_size()
 
-            # Chance to generate two more balls
+            # Chance to generate a power-up
             if random.random() < 0.1:
                 r = brick.get_collision_rect()
+                powerup_name = random.choice(("TwoMoreBall", "CatchBall"))
                 self.powerups.append(
-                    self.powerups_abstract_factory.get_factory("TwoMoreBall").create(
+                    self.powerups_abstract_factory.get_factory(powerup_name).create(
                         r.centerx - 8, r.centery - 8
                     )
                 )
 
         # Removing all balls that are not in play
         self.balls = [ball for ball in self.balls if ball.active]
+        self.caught_balls = {
+            ball: offset
+            for ball, offset in self.caught_balls.items()
+            if ball.active and ball in self.balls
+        }
 
         self.brickset.update(dt)
 
@@ -193,15 +244,20 @@ class PlayState(BaseState):
             elif input_data.released and self.paddle.vx > 0:
                 self.paddle.vx = 0
         elif input_id == "pause" and input_data.pressed:
-            self.state_machine.change(
-                "pause",
-                level=self.level,
-                score=self.score,
-                lives=self.lives,
-                paddle=self.paddle,
-                balls=self.balls,
-                brickset=self.brickset,
-                points_to_next_live=self.points_to_next_live,
-                live_factor=self.live_factor,
-                powerups=self.powerups,
-            )
+            if self.caught_balls:
+                self.launch_caught_balls()
+            else:
+                self.state_machine.change(
+                    "pause",
+                    level=self.level,
+                    score=self.score,
+                    lives=self.lives,
+                    paddle=self.paddle,
+                    balls=self.balls,
+                    brickset=self.brickset,
+                    points_to_next_live=self.points_to_next_live,
+                    live_factor=self.live_factor,
+                    powerups=self.powerups,
+                    capture_time_remaining=self.capture_time_remaining,
+                    caught_balls=self.caught_balls,
+                )

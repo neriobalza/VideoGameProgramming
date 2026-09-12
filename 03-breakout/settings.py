@@ -53,6 +53,9 @@ PADDLE_GROW_UP_POINTS = 200
 
 POWERUP_SPEED = 50
 
+# Time in seconds during which the paddle can catch balls.
+CATCH_BALL_POWERUP_DURATION = 5.0
+
 BASE_DIR = Path(__file__).parent
 
 SOUNDS = {

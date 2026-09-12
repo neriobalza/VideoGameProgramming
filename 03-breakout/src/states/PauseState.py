@@ -18,6 +18,8 @@ class PauseState(BaseState):
         self.live_factor = params["live_factor"]
         self.points_to_next_live = params["points_to_next_live"]
         self.powerups = params["powerups"]
+        self.capture_time_remaining = params.get("capture_time_remaining", 0)
+        self.caught_balls = params.get("caught_balls", {})
         settings.SOUNDS["pause"].play()
 
     def render(self, surface: pygame.Surface) -> None:
@@ -75,5 +77,7 @@ class PauseState(BaseState):
                 points_to_next_live=self.points_to_next_live,
                 live_factor=self.live_factor,
                 powerups=self.powerups,
+                capture_time_remaining=self.capture_time_remaining,
+                caught_balls=self.caught_balls,
                 resume=True,
             )
