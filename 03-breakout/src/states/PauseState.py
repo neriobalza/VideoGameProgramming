@@ -22,6 +22,7 @@ class PauseState(BaseState):
         self.caught_balls = params.get("caught_balls", {})
         self.cannons_ready = params.get("cannons_ready", False)
         self.projectiles = params.get("projectiles", [])
+        self.ghost_time_remaining = params.get("ghost_time_remaining", 0)
         settings.SOUNDS["pause"].play()
 
     def render(self, surface: pygame.Surface) -> None:
@@ -83,5 +84,6 @@ class PauseState(BaseState):
                 caught_balls=self.caught_balls,
                 cannons_ready=self.cannons_ready,
                 projectiles=self.projectiles,
+                ghost_time_remaining=self.ghost_time_remaining,
                 resume=True,
             )

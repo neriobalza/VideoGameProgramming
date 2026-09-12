@@ -41,6 +41,7 @@ class PlayState(BaseState):
         self.caught_balls = params.get("caught_balls", {})
         self.cannons_ready = params.get("cannons_ready", False)
         self.projectiles = params.get("projectiles", [])
+        self.ghost_time_remaining = params.get("ghost_time_remaining", 0)
 
         if not params.get("resume", False):
             self.balls[0].vx = random.randint(-80, 80)
@@ -52,6 +53,22 @@ class PlayState(BaseState):
 
     def activate_ball_capture(self) -> None:
         self.capture_time_remaining = settings.CATCH_BALL_POWERUP_DURATION
+
+    def activate_ghost_paddle(self) -> None:
+        self.ghost_time_remaining = settings.GHOST_POWERUP_DURATION
+
+    def solve_ghost_boundary(self, ball) -> None:
+        if (
+            ball.vy <= 0
+            or ball.y + ball.height < self.paddle.y
+            or ball.collides(self.paddle)
+        ):
+            return
+
+        settings.SOUNDS["wall_hit"].stop()
+        settings.SOUNDS["wall_hit"].play()
+        ball.y = self.paddle.y - ball.height
+        ball.vy *= -1
 
     def catch_ball(self, ball) -> None:
         max_offset = max(0, self.paddle.width - ball.width)
@@ -116,11 +133,13 @@ class PlayState(BaseState):
             self.paddle.inc_size()
 
     def generate_powerup(self, brick) -> None:
-        if random.random() >= 0.1:
+        if random.random() >= settings.POWERUP_SPAWN_CHANCE:
             return
 
         r = brick.get_collision_rect()
-        powerup_name = random.choice(("TwoMoreBall", "CatchBall", "Cannons"))
+        powerup_name = random.choice(
+            ("TwoMoreBall", "CatchBall", "Cannons", "GhostPaddle")
+        )
         self.powerups.append(
             self.powerups_abstract_factory.get_factory(powerup_name).create(
                 r.centerx - 8, r.centery - 8
@@ -145,6 +164,7 @@ class PlayState(BaseState):
 
     def update(self, dt: float) -> None:
         self.capture_time_remaining = max(0, self.capture_time_remaining - max(0, dt))
+        ghost_paddle_active = self.ghost_time_remaining > 0
         self.paddle.update(dt)
 
         for ball in self.balls:
@@ -153,6 +173,10 @@ class PlayState(BaseState):
                 continue
 
             ball.update(dt)
+
+            if ghost_paddle_active:
+                self.solve_ghost_boundary(ball)
+
             ball.solve_world_boundaries()
 
             # Check collision with the paddle
@@ -188,6 +212,9 @@ class PlayState(BaseState):
             for ball, offset in self.caught_balls.items()
             if ball.active and ball in self.balls
         }
+        self.ghost_time_remaining = max(
+            0, self.ghost_time_remaining - max(0, dt)
+        )
 
         self.update_projectiles(dt)
         self.brickset.update(dt)
@@ -265,6 +292,14 @@ class PlayState(BaseState):
 
         self.paddle.render(surface)
 
+        if self.ghost_time_remaining > 0:
+            pygame.draw.line(
+                surface,
+                settings.GHOST_PADDLE_COLOR,
+                (0, self.paddle.y),
+                (settings.VIRTUAL_WIDTH, self.paddle.y),
+            )
+
         if self.cannons_ready:
             cannon_y = self.paddle.y - settings.CANNON_HEIGHT
             pygame.draw.rect(
@@ -329,4 +364,5 @@ class PlayState(BaseState):
                     caught_balls=self.caught_balls,
                     cannons_ready=self.cannons_ready,
                     projectiles=self.projectiles,
+                    ghost_time_remaining=self.ghost_time_remaining,
                 )
