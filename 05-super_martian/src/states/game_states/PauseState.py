@@ -22,6 +22,7 @@ import settings
 class PauseState(BaseState):
     def enter(self, **enter_params: Dict[str, Any]) -> None:
         self.level = enter_params["level"]
+        self.total_score = enter_params.get("total_score", 0)
         self.camera = enter_params["camera"]
         self.game_level = enter_params["game_level"]
         self.tilemap = self.game_level.tilemap
@@ -61,6 +62,7 @@ class PauseState(BaseState):
             self.state_machine.change(
                 "play",
                 level=self.level,
+                total_score=self.total_score,
                 camera=self.camera,
                 game_level=self.game_level,
                 player=self.player,

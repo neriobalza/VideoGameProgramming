@@ -62,12 +62,13 @@ class GameEntity(mixins.DrawableMixin, mixins.AnimatedMixin, mixins.CollidableMi
         # Applied unconditionally (not just while jumping/falling) so the
         # vertical move below is never a no-op dy=0 call, which would skip
         # move_and_collide's y-axis check and leave on_ground stale.
+        old_x, old_y = self.x, self.y
         self.vy += settings.GRAVITY * dt
 
         self.state_machine.update(dt)
         mixins.AnimatedMixin.update(self, dt)
 
-        self.x, self.y, self.collided_x, collided_y = move_and_collide(
+        self.x, self.y, tile_collided_x, tile_collided_y = move_and_collide(
             self.tilemap,
             self.COLLISION_LAYER,
             self.x,
@@ -77,6 +78,15 @@ class GameEntity(mixins.DrawableMixin, mixins.AnimatedMixin, mixins.CollidableMi
             self.vx * dt,
             self.vy * dt,
         )
+
+        (
+            self.x,
+            self.y,
+            block_collided_x,
+            block_collided_y,
+        ) = self.game_level.resolve_special_block_collision(self, old_x, old_y)
+        self.collided_x = tile_collided_x or block_collided_x
+        collided_y = tile_collided_y or block_collided_y
 
         if collided_y:
             if self.vy > 0:

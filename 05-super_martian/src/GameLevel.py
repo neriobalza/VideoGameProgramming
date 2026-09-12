@@ -9,7 +9,7 @@ This file contains the class GameLevel.
 """
 
 import random
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import pygame
 
@@ -21,6 +21,7 @@ from src.Creature import Creature
 from src.FlyingCreature import FlyingCreature
 from src.GameEntity import GameEntity
 from src.GameItem import GameItem
+from src.SpecialBlock import SpecialBlock
 from src.definitions import creatures, items
 
 
@@ -29,6 +30,8 @@ class GameLevel:
         self.tilemap = load_tiled_map(settings.TILEMAPS[num_level])
         self.creatures = []
         self.items = []
+        self.special_block = None
+        self.key = None
 
         for obj in self.tilemap.object_layers.get("creatures", []):
             self.add_creature(
@@ -51,6 +54,17 @@ class GameLevel:
                     "width": obj.width,
                     "height": obj.height,
                 }
+            )
+
+        key_blocks = self.tilemap.object_layers.get("key_blocks", [])
+        if key_blocks:
+            obj = key_blocks[0]
+            self.special_block = SpecialBlock(
+                obj.x,
+                obj.y,
+                obj.width,
+                obj.height,
+                obj.properties.get("target_score", settings.DEFAULT_TARGET_SCORE),
             )
 
         self._schedule_flying_creature_spawn()
@@ -125,7 +139,90 @@ class GameLevel:
     def get_rect(self) -> pygame.Rect:
         return pygame.Rect(0, 0, self.tilemap.pixel_width, self.tilemap.pixel_height)
 
-    def update(self, dt: float) -> None:
+    @property
+    def target_score(self) -> int:
+        if self.special_block is None:
+            return 0
+        return self.special_block.target_score
+
+    def resolve_special_block_collision(
+        self, entity: GameEntity, old_x: float, old_y: float
+    ) -> Tuple[float, float, bool, bool]:
+        block = self.special_block
+        if block is None or not block.active:
+            return entity.x, entity.y, False, False
+
+        block_rect = block.get_collision_rect()
+        x = entity.x
+        y = entity.y
+        collided_x = False
+        collided_y = False
+
+        horizontal_overlap = (
+            x + entity.width > block_rect.left and x < block_rect.right
+        )
+        vertical_overlap = (
+            y + entity.height > block_rect.top and y < block_rect.bottom
+        )
+
+        if (
+            vertical_overlap
+            and horizontal_overlap
+            and entity.vx > 0
+            and old_x + entity.width <= block_rect.left
+        ):
+            x = block_rect.left - entity.width
+            collided_x = True
+        elif (
+            vertical_overlap
+            and horizontal_overlap
+            and entity.vx < 0
+            and old_x >= block_rect.right
+        ):
+            x = block_rect.right
+            collided_x = True
+
+        horizontal_overlap = (
+            x + entity.width > block_rect.left and x < block_rect.right
+        )
+        if horizontal_overlap and entity.vy > 0:
+            if (
+                old_y + entity.height <= block_rect.top
+                and y + entity.height > block_rect.top
+            ):
+                y = block_rect.top - entity.height
+                collided_y = True
+        elif horizontal_overlap and entity.vy < 0:
+            if old_y >= block_rect.bottom and y < block_rect.bottom:
+                y = block_rect.bottom
+                collided_y = True
+                if getattr(entity, "can_hit_special_blocks", False):
+                    self._hit_special_block()
+
+        return x, y, collided_x, collided_y
+
+    def _hit_special_block(self) -> None:
+        if self.special_block is None:
+            return
+
+        key = self.special_block.hit()
+        if key is not None:
+            self.key = key
+
+    def update(self, dt: float, player_score: int = 0) -> None:
+        if (
+            self.special_block is not None
+            and not self.special_block.active
+            and player_score >= self.special_block.target_score
+        ):
+            self.special_block.activate()
+
+        if self.special_block is not None:
+            self.special_block.update(dt)
+
+        if self.key is not None:
+            self.key.update(dt)
+
         for creature in self.creatures:
             creature.update(dt)
 
@@ -141,3 +238,7 @@ class GameLevel:
         for item in self.items:
             if item.active:
                 item.render(surface, camera)
+        if self.key is not None:
+            self.key.render(surface, camera)
+        if self.special_block is not None:
+            self.special_block.render(surface, camera)

@@ -35,8 +35,8 @@ VIRTUAL_WIDTH = 400
 VIRTUAL_HEIGHT = 192
 
 # Size of our actual window
-WINDOW_WIDTH = VIRTUAL_WIDTH * 4
-WINDOW_HEIGHT = VIRTUAL_HEIGHT * 4
+WINDOW_WIDTH = VIRTUAL_WIDTH * 3
+WINDOW_HEIGHT = VIRTUAL_HEIGHT * 3
 
 PLAYER_SPEED = 80
 
@@ -57,7 +57,11 @@ CAMERA_FOLLOW_RATE = 8.0
 FLYING_CREATURE_MIN_SPAWN_DELAY = 4
 FLYING_CREATURE_MAX_SPAWN_DELAY = 9
 
-NUM_LEVELS = 1
+DEFAULT_TARGET_SCORE = 30
+LEVEL_TRANSITION_DURATION = 0.75
+VICTORY_SCREEN_DURATION = 5.5
+
+NUM_LEVELS = 2
 
 BASE_DIR = pathlib.Path(__file__).parent
 
@@ -85,6 +89,9 @@ SOUNDS = {
     "jump": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "jump.wav"),
     "timer": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "timer.wav"),
     "count": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "count.wav"),
+    "level_complete": pygame.mixer.Sound(
+        BASE_DIR / "assets" / "sounds" / "count.wav"
+    ),
 }
 
 SOUNDS["pickup_coin"].set_volume(0.5)

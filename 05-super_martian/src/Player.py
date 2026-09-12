@@ -49,6 +49,7 @@ class Player(GameEntity):
         )
         self.score = 0
         self.coins_counter = {54: 0, 55: 0, 61: 0, 62: 0}
+        self.can_hit_special_blocks = True
 
         self.command_bindings = CommandBindings()
         self.command_bindings.bind("move_left", press=MOVE_LEFT, release=STOP_MOVE_LEFT)

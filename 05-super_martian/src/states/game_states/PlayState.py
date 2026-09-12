@@ -27,6 +27,13 @@ from src.Player import Player
 class PlayState(BaseState):
     def enter(self, **enter_params: Dict[str, Any]) -> None:
         self.level = enter_params.get("level", 1)
+        self.total_score = enter_params.get("total_score", 0)
+        self.level_completed = False
+        self.coins_locked = False
+        is_resuming = enter_params.get("game_level") is not None
+        self.transition_mode = None if is_resuming else "fade_in"
+        self.transition_elapsed = 0.0
+        self.transition_alpha = 0 if is_resuming else 255
         self.game_level = enter_params.get("game_level")
         if self.game_level is None:
             self.game_level = GameLevel(self.level)
@@ -75,11 +82,21 @@ class PlayState(BaseState):
             Timer.resume()
 
     def update(self, dt: float) -> None:
+        if self.level_completed:
+            self._update_transition(dt)
+            return
+
         if self.player.is_dead:
             pygame.mixer.music.stop()
             pygame.mixer.music.unload()
             Timer.clear()
-            self.state_machine.change("game_over", self.player)
+            self.state_machine.change(
+                "game_over",
+                player=self.player,
+                level=self.level,
+                total_score=self.total_score,
+            )
+            return
 
         self.player.update(dt)
 
@@ -87,19 +104,84 @@ class PlayState(BaseState):
             self.player.change_state("dead")
 
         self.camera.update(dt)
-        self.game_level.update(dt)
+        self.game_level.update(dt, self.player.score)
 
         for creature in self.game_level.creatures:
             if self.player.collides(creature):
                 self.player.change_state("dead")
 
+        key = self.game_level.key
+        if (
+            key is not None
+            and key.active
+            and key.collidable
+            and self.player.collides(key)
+        ):
+            key.active = False
+            self._complete_level()
+            return
+
         for item in self.game_level.items:
-            if not item.active or not item.collidable:
+            if self.coins_locked or not item.active or not item.collidable:
                 continue
 
             if self.player.collides(item):
                 item.on_collide(self.player)
                 item.on_consume(self.player)
+
+        self._update_transition(dt)
+
+    def _complete_level(self) -> None:
+        self.level_completed = True
+        self.coins_locked = True
+        self.player.vx = 0
+        self.player.move_direction = 0
+        self.player.jump_requested = False
+        self.player.jump_held = False
+        Timer.pause()
+        pygame.mixer.music.fadeout(round(settings.LEVEL_TRANSITION_DURATION * 1000))
+        settings.SOUNDS["level_complete"].play()
+        self.transition_mode = "fade_out"
+        self.transition_elapsed = 0.0
+        self.transition_alpha = 0
+
+    def _update_transition(self, dt: float) -> None:
+        if self.transition_mode is None:
+            return
+
+        self.transition_elapsed = min(
+            settings.LEVEL_TRANSITION_DURATION, self.transition_elapsed + dt
+        )
+        progress = self.transition_elapsed / settings.LEVEL_TRANSITION_DURATION
+
+        if self.transition_mode == "fade_in":
+            self.transition_alpha = round(255 * (1 - progress))
+            if progress >= 1:
+                self.transition_mode = None
+        else:
+            self.transition_alpha = round(255 * progress)
+            if progress >= 1:
+                self._advance_level()
+
+    def _advance_level(self) -> None:
+        total_score = self.total_score + self.player.score
+        Timer.clear()
+        Timer.resume()
+        pygame.mixer.music.stop()
+        pygame.mixer.music.unload()
+
+        if self.level < settings.NUM_LEVELS:
+            self.state_machine.change(
+                "play",
+                level=self.level + 1,
+                total_score=total_score,
+            )
+        else:
+            self.state_machine.change(
+                "victory",
+                total_score=total_score,
+                levels_completed=settings.NUM_LEVELS,
+            )
 
     def render(self, surface: pygame.Surface) -> None:
         self.game_level.render(surface, self.camera)
@@ -125,12 +207,50 @@ class PlayState(BaseState):
             shadowed=True,
         )
 
+        render_text(
+            surface,
+            f"Goal: {self.game_level.target_score}",
+            settings.FONTS["small"],
+            settings.VIRTUAL_WIDTH // 2,
+            5,
+            (255, 226, 80),
+            center=True,
+            shadowed=True,
+        )
+
+        if (
+            self.game_level.special_block is not None
+            and self.game_level.special_block.active
+            and not self.game_level.special_block.used
+        ):
+            render_text(
+                surface,
+                "Key block ready!",
+                settings.FONTS["small"],
+                settings.VIRTUAL_WIDTH // 2,
+                18,
+                (255, 226, 80),
+                center=True,
+                shadowed=True,
+            )
+
+        if self.transition_alpha > 0:
+            fade = pygame.Surface(
+                (settings.VIRTUAL_WIDTH, settings.VIRTUAL_HEIGHT), pygame.SRCALPHA
+            )
+            fade.fill((0, 0, 0, self.transition_alpha))
+            surface.blit(fade, (0, 0))
+
     def on_input(self, input_id: str, input_data: InputData) -> None:
+        if self.level_completed or self.transition_mode == "fade_in":
+            return
+
         if input_id == "pause" and input_data.pressed:
             Timer.pause()
             self.state_machine.change(
                 "pause",
                 level=self.level,
+                total_score=self.total_score,
                 camera=self.camera,
                 game_level=self.game_level,
                 player=self.player,

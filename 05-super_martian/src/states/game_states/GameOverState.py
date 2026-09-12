@@ -18,12 +18,18 @@ import settings
 
 
 class GameOverState(BaseState):
-    def enter(self, player) -> None:
+    def enter(self, player, level: int = 1, total_score: int = 0) -> None:
         self.player = player
+        self.level = level
+        self.total_score = total_score
 
     def on_input(self, input_id: str, input_data: InputData) -> None:
         if input_id == "enter" and input_data.pressed:
-            self.state_machine.change("play")
+            self.state_machine.change(
+                "play",
+                level=self.level,
+                total_score=self.total_score,
+            )
 
     def render(self, surface: pygame.Surface) -> None:
         surface.fill((25, 130, 196))
@@ -39,7 +45,18 @@ class GameOverState(BaseState):
             shadowed=True,
         )
 
-        y = 50
+        render_text(
+            surface,
+            f"Level {self.level}",
+            settings.FONTS["small"],
+            settings.VIRTUAL_WIDTH // 2,
+            40,
+            (255, 226, 80),
+            center=True,
+            shadowed=True,
+        )
+
+        y = 58
 
         for color, amount in self.player.coins_counter.items():
             surface.blit(
