@@ -50,13 +50,16 @@ class Brick:
         self.particle_system.set_linear_acceleration(-0.3, 0.5, 0.3, 1)
         self.particle_system.set_area_spread(4, 7)
 
-    def hit(self) -> None:
+    def _show_impact(self) -> None:
         settings.SOUNDS["brick_hit_2"].stop()
         settings.SOUNDS["brick_hit_2"].play()
 
         r, g, b = COLOR_PALETTE[self.color]
         self.particle_system.set_colors([(r, g, b, 10), (r, g, b, 50)])
         self.particle_system.generate()
+
+    def hit(self) -> None:
+        self._show_impact()
 
         if self.tier == 0:
             if self.color == 0:
@@ -68,6 +71,15 @@ class Brick:
                 self.color -= 1
         else:
             self.tier -= 1
+
+    def destroy(self) -> None:
+        if self.broken:
+            return
+
+        self._show_impact()
+        self.broken = True
+        settings.SOUNDS["brick_hit_1"].stop()
+        settings.SOUNDS["brick_hit_1"].play()
 
     def score(self):
         return self.tier * 200 + (self.color + 1) * 25

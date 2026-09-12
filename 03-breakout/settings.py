@@ -31,6 +31,7 @@ input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RIGHT, "move_ri
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_DOWN, "move_down")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_LEFT, "move_left")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_SPACE, "pause")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_f, "fire")
 
 TITLE = "Breakout"
 
@@ -55,6 +56,15 @@ POWERUP_SPEED = 50
 
 # Time in seconds during which the paddle can catch balls.
 CATCH_BALL_POWERUP_DURATION = 5.0
+
+PROJECTILE_SPEED = 250
+PROJECTILE_WIDTH = 2
+PROJECTILE_HEIGHT = 8
+PROJECTILE_COLOR = (255, 255, 255)
+
+CANNON_WIDTH = 4
+CANNON_HEIGHT = 6
+CANNON_COLOR = (217, 87, 99)
 
 BASE_DIR = Path(__file__).parent
 

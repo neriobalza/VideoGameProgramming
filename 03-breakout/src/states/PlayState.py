@@ -12,13 +12,14 @@ import random
 
 import pygame
 
-from gale.factory import AbstractFactory
+from gale.factory import AbstractFactory, Factory
 from gale.state import BaseState
 from gale.input_handler import InputData
 from gale.text import render_text
 
 import settings
 import src.powerups
+from src.Projectile import Projectile
 
 
 class PlayState(BaseState):
@@ -38,6 +39,8 @@ class PlayState(BaseState):
         self.powerups = params.get("powerups", [])
         self.capture_time_remaining = params.get("capture_time_remaining", 0)
         self.caught_balls = params.get("caught_balls", {})
+        self.cannons_ready = params.get("cannons_ready", False)
+        self.projectiles = params.get("projectiles", [])
 
         if not params.get("resume", False):
             self.balls[0].vx = random.randint(-80, 80)
@@ -45,6 +48,7 @@ class PlayState(BaseState):
             settings.SOUNDS["paddle_hit"].play()
 
         self.powerups_abstract_factory = AbstractFactory("src.powerups")
+        self.projectile_factory = Factory(Projectile)
 
     def activate_ball_capture(self) -> None:
         self.capture_time_remaining = settings.CATCH_BALL_POWERUP_DURATION
@@ -78,6 +82,66 @@ class PlayState(BaseState):
             settings.SOUNDS["paddle_hit"].play()
 
         self.caught_balls = {}
+
+    def fire_projectiles(self) -> None:
+        if not self.cannons_ready or self.projectiles:
+            return
+
+        projectile_y = self.paddle.y - settings.PROJECTILE_HEIGHT
+        self.projectiles = [
+            self.projectile_factory.create(self.paddle.x, projectile_y),
+            self.projectile_factory.create(
+                self.paddle.x + self.paddle.width - settings.PROJECTILE_WIDTH,
+                projectile_y,
+            ),
+        ]
+        self.cannons_ready = False
+
+    def update_score(self, brick) -> None:
+        self.score += brick.score()
+
+        # Check earn life
+        if self.score >= self.points_to_next_live:
+            settings.SOUNDS["life"].play()
+            self.lives = min(3, self.lives + 1)
+            self.live_factor += 0.5
+            self.points_to_next_live += settings.LIVE_POINTS_BASE * self.live_factor
+
+        # Check growing up of the paddle
+        if self.score >= self.points_to_next_grow_up:
+            settings.SOUNDS["grow_up"].play()
+            self.points_to_next_grow_up += (
+                settings.PADDLE_GROW_UP_POINTS * (self.paddle.size + 1) * self.level
+            )
+            self.paddle.inc_size()
+
+    def generate_powerup(self, brick) -> None:
+        if random.random() >= 0.1:
+            return
+
+        r = brick.get_collision_rect()
+        powerup_name = random.choice(("TwoMoreBall", "CatchBall", "Cannons"))
+        self.powerups.append(
+            self.powerups_abstract_factory.get_factory(powerup_name).create(
+                r.centerx - 8, r.centery - 8
+            )
+        )
+
+    def update_projectiles(self, dt: float) -> None:
+        for projectile in self.projectiles:
+            projectile.update(dt)
+
+            for brick in self.brickset.bricks.values():
+                if brick.broken or not projectile.collides(brick):
+                    continue
+
+                self.update_score(brick)
+                brick.destroy()
+                self.generate_powerup(brick)
+
+        self.projectiles = [
+            projectile for projectile in self.projectiles if projectile.active
+        ]
 
     def update(self, dt: float) -> None:
         self.capture_time_remaining = max(0, self.capture_time_remaining - max(0, dt))
@@ -113,33 +177,9 @@ class PlayState(BaseState):
                 continue
 
             brick.hit()
-            self.score += brick.score()
+            self.update_score(brick)
             ball.rebound(brick)
-
-            # Check earn life
-            if self.score >= self.points_to_next_live:
-                settings.SOUNDS["life"].play()
-                self.lives = min(3, self.lives + 1)
-                self.live_factor += 0.5
-                self.points_to_next_live += settings.LIVE_POINTS_BASE * self.live_factor
-
-            # Check growing up of the paddle
-            if self.score >= self.points_to_next_grow_up:
-                settings.SOUNDS["grow_up"].play()
-                self.points_to_next_grow_up += (
-                    settings.PADDLE_GROW_UP_POINTS * (self.paddle.size + 1) * self.level
-                )
-                self.paddle.inc_size()
-
-            # Chance to generate a power-up
-            if random.random() < 0.1:
-                r = brick.get_collision_rect()
-                powerup_name = random.choice(("TwoMoreBall", "CatchBall"))
-                self.powerups.append(
-                    self.powerups_abstract_factory.get_factory(powerup_name).create(
-                        r.centerx - 8, r.centery - 8
-                    )
-                )
+            self.generate_powerup(brick)
 
         # Removing all balls that are not in play
         self.balls = [ball for ball in self.balls if ball.active]
@@ -149,6 +189,7 @@ class PlayState(BaseState):
             if ball.active and ball in self.balls
         }
 
+        self.update_projectiles(dt)
         self.brickset.update(dt)
 
         if not self.balls:
@@ -179,9 +220,7 @@ class PlayState(BaseState):
         self.powerups = [p for p in self.powerups if p.active]
 
         # Check victory
-        if self.brickset.size == 1 and next(
-            (True for _, b in self.brickset.bricks.items() if b.broken), False
-        ):
+        if not any(not brick.broken for brick in self.brickset.bricks.values()):
             self.state_machine.change(
                 "victory",
                 lives=self.lives,
@@ -226,8 +265,34 @@ class PlayState(BaseState):
 
         self.paddle.render(surface)
 
+        if self.cannons_ready:
+            cannon_y = self.paddle.y - settings.CANNON_HEIGHT
+            pygame.draw.rect(
+                surface,
+                settings.CANNON_COLOR,
+                (
+                    self.paddle.x,
+                    cannon_y,
+                    settings.CANNON_WIDTH,
+                    settings.CANNON_HEIGHT,
+                ),
+            )
+            pygame.draw.rect(
+                surface,
+                settings.CANNON_COLOR,
+                (
+                    self.paddle.x + self.paddle.width - settings.CANNON_WIDTH,
+                    cannon_y,
+                    settings.CANNON_WIDTH,
+                    settings.CANNON_HEIGHT,
+                ),
+            )
+
         for ball in self.balls:
             ball.render(surface)
+
+        for projectile in self.projectiles:
+            projectile.render(surface)
 
         for powerup in self.powerups:
             powerup.render(surface)
@@ -243,6 +308,8 @@ class PlayState(BaseState):
                 self.paddle.vx = settings.PADDLE_SPEED
             elif input_data.released and self.paddle.vx > 0:
                 self.paddle.vx = 0
+        elif input_id == "fire" and input_data.pressed:
+            self.fire_projectiles()
         elif input_id == "pause" and input_data.pressed:
             if self.caught_balls:
                 self.launch_caught_balls()
@@ -260,4 +327,6 @@ class PlayState(BaseState):
                     powerups=self.powerups,
                     capture_time_remaining=self.capture_time_remaining,
                     caught_balls=self.caught_balls,
+                    cannons_ready=self.cannons_ready,
+                    projectiles=self.projectiles,
                 )
