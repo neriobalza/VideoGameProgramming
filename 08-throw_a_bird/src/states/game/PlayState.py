@@ -7,8 +7,8 @@ alejandro.j.mujic4@gmail.com
 
 This file contains the class PlayState, ported from main.script: the
 whole per-frame update/input loop -- aiming, panning, flinging the bird,
-camera follow-and-zoom, and idle-detection to reset the bird back to the
-slingshot once a shot has settled.
+its one-use split ability, camera follow-and-zoom, and idle-detection to
+reset the bird back to the slingshot once every bird in a shot has settled.
 
 Deviation from the Lua source: main.script disables the parrot's
 collisionobject at rest and re-enables it only once flung, so gravity
@@ -24,6 +24,7 @@ than it can visibly fall.
 """
 
 import math
+from typing import List
 
 import pygame
 
@@ -78,13 +79,20 @@ IDLE_LINEAR_SPEED_THRESHOLD = 30
 IDLE_ANGULAR_SPEED_THRESHOLD = 0.3
 IDLE_FRAMES_LIMIT = 100
 
+# Space splits a bird's current velocity into three equal-speed trajectories:
+# the original center line plus one path on either side of it. The clones are
+# spawned just outside the original bird so their fixtures do not overlap and
+# immediately push the otherwise-unchanged central bird off course.
+SPLIT_ANGLE_DEGREES = 15
+SPLIT_SPAWN_GAP = 2
+
 CAMERA_FOLLOW_RATE = 6.0
 CAMERA_ZOOM_LERP_RATE = 3.0
 CAMERA_ZOOM_MIN = 1.0
 CAMERA_ZOOM_MAX = 1.5
 CAMERA_PAN_MARGIN = 300
 
-HUD_TEXT = "Drag the bird to aim and release to fling. Drag elsewhere to pan."
+HUD_TEXT = "Drag the bird to aim and release. Press space in flight to split."
 
 
 class PlayState(BaseState):
@@ -93,6 +101,8 @@ class PlayState(BaseState):
 
         self.level = Level(self.world)
         self.bird = Bird(self.world, self.level.bird_start.x, self.level.bird_start.y)
+        self.birds: List[Bird] = [self.bird]
+        self.world.on_collision_begin(self._on_collision)
 
         self.camera = Camera(settings.VIRTUAL_WIDTH, settings.VIRTUAL_HEIGHT)
         self.camera.x, self.camera.y = self.bird.position
@@ -108,6 +118,8 @@ class PlayState(BaseState):
         self.panning = False
         self.flinging = False
         self.idle_frames = 0
+        self.has_split = False
+        self.has_impacted = False
 
         self.pressed_position = pygame.Vector2()
         self.pressed_camera_target = pygame.Vector2()
@@ -129,7 +141,7 @@ class PlayState(BaseState):
             return
 
         if self.flinging:
-            self.camera_target.update(self.bird.position)
+            self.camera_target.update(self._birds_center())
             self._update_idle()
         elif self.aiming:
             self._hold_bird_while_aiming()
@@ -157,25 +169,45 @@ class PlayState(BaseState):
         self.bird.body.angular_velocity = 0.0
 
     def _update_idle(self) -> None:
-        linear_speed = self.bird.body.velocity.length()
-        angular_speed = abs(self.bird.body.angular_velocity)
+        all_birds_settled = all(
+            bird.body.velocity.length() < IDLE_LINEAR_SPEED_THRESHOLD
+            and abs(bird.body.angular_velocity) < IDLE_ANGULAR_SPEED_THRESHOLD
+            for bird in self.birds
+        )
 
-        if (
-            linear_speed < IDLE_LINEAR_SPEED_THRESHOLD
-            and angular_speed < IDLE_ANGULAR_SPEED_THRESHOLD
-        ):
+        if all_birds_settled:
             self.idle_frames += 1
 
             if self.idle_frames > IDLE_FRAMES_LIMIT:
-                self.flinging = False
-                self.idle_frames = 0
-                self.bird.reset()
-                self.camera_target.update(self.bird.position)
+                self._reset_shot()
         else:
             self.idle_frames = 0
 
+    def _reset_shot(self) -> None:
+        for bird in self.birds[1:]:
+            self.world.destroy_body(bird.body)
+
+        self.birds = [self.bird]
+        self.flinging = False
+        self.idle_frames = 0
+        self.has_split = False
+        self.has_impacted = False
+        self.bird.reset()
+        self.camera_target.update(self.bird.position)
+
+    def _birds_center(self) -> pygame.Vector2:
+        center = pygame.Vector2()
+
+        for bird in self.birds:
+            center += bird.position
+
+        return center / len(self.birds)
+
     def _update_zoom(self, dt: float) -> None:
-        distance = abs(self.bird.position.x - self.bird.initial_position.x)
+        distance = max(
+            abs(bird.position.x - self.bird.initial_position.x)
+            for bird in self.birds
+        )
         reach = max(1.0, self.bird.initial_position.x)
         target_ratio = max(
             CAMERA_ZOOM_MIN, min(CAMERA_ZOOM_MAX, math.sqrt(distance / reach))
@@ -187,7 +219,9 @@ class PlayState(BaseState):
     def render(self, surface: pygame.Surface) -> None:
         surface.fill(settings.BG_COLOR)
         self.level.render(surface, self.camera)
-        self.bird.render(surface, self.camera)
+
+        for bird in self.birds:
+            bird.render(surface, self.camera)
 
         if self.aiming:
             self._render_pull_line(surface)
@@ -204,6 +238,8 @@ class PlayState(BaseState):
             self._on_touch(input_data)
         elif input_id == "touch_motion":
             self._on_touch_motion(input_data)
+        elif input_id == "split" and input_data.pressed:
+            self._split_bird()
 
     def _mouse_to_virtual(self, position) -> pygame.Vector2:
         scale_x = settings.VIRTUAL_WIDTH / settings.WINDOW_WIDTH
@@ -244,6 +280,56 @@ class PlayState(BaseState):
         self.bird.body.apply_impulse(pull.x * scale, pull.y * scale)
         self.flinging = True
         self.idle_frames = 0
+        self.has_split = False
+        self.has_impacted = False
+
+    def _split_bird(self) -> None:
+        if not self.flinging or self.has_split or self.has_impacted:
+            return
+
+        # The callback normally records an impact during fixed_update(), but
+        # checking the current contacts too closes the small input/physics-step
+        # timing window in which space could arrive as contact begins.
+        if any(
+            other.user_data != "wind"
+            for other in self.bird.body.touching_bodies
+        ):
+            self.has_impacted = True
+            return
+
+        central_velocity = pygame.Vector2(self.bird.body.velocity)
+        side_velocities = [
+            central_velocity.rotate(-SPLIT_ANGLE_DEGREES),
+            central_velocity.rotate(SPLIT_ANGLE_DEGREES),
+        ]
+        side_velocities.sort(key=lambda velocity: velocity.y)
+
+        self.has_split = True
+
+        for index, velocity in enumerate(side_velocities):
+            offset = velocity - central_velocity
+
+            if offset.length_squared() == 0:
+                offset.update(0, -1 if index == 0 else 1)
+
+            offset.scale_to_length(self.bird.radius * 2 + SPLIT_SPAWN_GAP)
+            position = self.bird.position + offset
+            clone = Bird(self.world, position.x, position.y)
+            clone.body.angle = self.bird.body.angle
+            clone.body.velocity = velocity
+            clone.body.angular_velocity = self.bird.body.angular_velocity
+            self.birds.append(clone)
+
+    def _on_collision(self, body_a, body_b) -> None:
+        if not self.flinging or self.has_split or self.has_impacted:
+            return
+
+        for bird_body, other_body in ((body_a, body_b), (body_b, body_a)):
+            if isinstance(bird_body.user_data, Bird):
+                # Wind zones are sensors: crossing one is not a physical hit.
+                if other_body.user_data != "wind":
+                    self.has_impacted = True
+                return
 
     def _on_touch_motion(self, input_data: InputData) -> None:
         if not (self.aiming or self.panning):
