@@ -10,7 +10,9 @@ inputs with an their ids, constants of values to set up the game, sounds,
 textures, frames, and fonts.
 """
 
+import math
 import pathlib
+import struct
 
 import pygame
 
@@ -82,6 +84,33 @@ FRAMES = {
     "creatures": frames.generate_frames(TEXTURES["creatures"], 16, 16),
 }
 
+
+def generate_victory_sound() -> pygame.mixer.Sound:
+    sample_rate, sample_size, channels = pygame.mixer.get_init()
+
+    if abs(sample_size) != 16:
+        return pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "count.wav")
+
+    samples = bytearray()
+    notes = ((523.25, 0.12), (659.25, 0.12), (783.99, 0.12), (1046.50, 0.28))
+
+    for frequency, duration in notes:
+        sample_count = round(sample_rate * duration)
+        attack_samples = max(1, round(sample_rate * 0.012))
+
+        for index in range(sample_count):
+            time = index / sample_rate
+            attack = min(1.0, index / attack_samples)
+            release = (1 - index / sample_count) ** 0.7
+            wave = math.sin(math.tau * frequency * time)
+            wave += 0.2 * math.sin(math.tau * frequency * 2 * time)
+            value = round(32767 * 0.18 * attack * release * wave)
+            packed_sample = struct.pack("<h", max(-32768, min(32767, value)))
+            samples.extend(packed_sample * channels)
+
+    return pygame.mixer.Sound(buffer=bytes(samples))
+
+
 SOUNDS = {
     "pickup_coin": pygame.mixer.Sound(
         BASE_DIR / "assets" / "sounds" / "pickup_coin.wav"
@@ -89,9 +118,7 @@ SOUNDS = {
     "jump": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "jump.wav"),
     "timer": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "timer.wav"),
     "count": pygame.mixer.Sound(BASE_DIR / "assets" / "sounds" / "count.wav"),
-    "level_complete": pygame.mixer.Sound(
-        BASE_DIR / "assets" / "sounds" / "count.wav"
-    ),
+    "victory": generate_victory_sound(),
 }
 
 SOUNDS["pickup_coin"].set_volume(0.5)

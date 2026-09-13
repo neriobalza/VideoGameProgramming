@@ -140,7 +140,7 @@ class PlayState(BaseState):
         self.player.jump_held = False
         Timer.pause()
         pygame.mixer.music.fadeout(round(settings.LEVEL_TRANSITION_DURATION * 1000))
-        settings.SOUNDS["level_complete"].play()
+        settings.SOUNDS["victory"].play()
         self.transition_mode = "fade_out"
         self.transition_elapsed = 0.0
         self.transition_alpha = 0
