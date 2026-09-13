@@ -61,9 +61,11 @@ class PlayerSwingSwordState(BaseEntityState):
 
         # Restart sword swing animation.
         self.entity.current_animation.reset()
+        self.hit_entities = set()
 
     def update(self, dt: float) -> None:
         self.entity.interact_requested = False
+        self.entity.bow_requested = False
 
         if self.entity.sword_requested:
             self.entity.sword_requested = False
@@ -71,9 +73,11 @@ class PlayerSwingSwordState(BaseEntityState):
             return
 
         for entity in self.dungeon.current_room.entities:
-            if entity.collides(self.sword_hitbox):
-                entity.damage(1)
-                settings.SOUNDS["hit-enemy"].play()
+            if entity not in self.hit_entities and entity.collides(self.sword_hitbox):
+                self.hit_entities.add(entity)
+
+                if entity.damage(1, "sword"):
+                    settings.SOUNDS["hit-enemy"].play()
 
         if self.entity.current_animation.times_played > 0:
             self.entity.current_animation.times_played = 0

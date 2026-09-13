@@ -19,6 +19,19 @@ def _pickup_heart(player, obj) -> None:
 
 
 GAME_OBJECT_DEFS: Dict[str, Dict[str, Any]] = {
+    "chest": {
+        "type": "chest",
+        "texture": "chest",
+        "frame": 1,
+        "width": 32,
+        "height": 32,
+        "solid": True,
+        "default_state": "closed",
+        "states": {
+            "closed": {"frame": 1},
+            "opened": {"frame": 1},
+        },
+    },
     "switch": {
         "type": "switch",
         "texture": "switches",

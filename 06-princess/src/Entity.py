@@ -107,8 +107,9 @@ class Entity:
         target_rect = pygame.Rect(round(target.x), round(target.y), target.width, target.height)
         return self.get_collision_rect().colliderect(target_rect)
 
-    def damage(self, dmg: int) -> None:
+    def damage(self, dmg: int, damage_type: str = "sword") -> bool:
         self.health -= dmg
+        return True
 
     def heal(self, life: int) -> None:
         self.health = min(self.health + life, 6)

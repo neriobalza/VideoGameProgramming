@@ -24,6 +24,7 @@ class TheLegendOfThePrincess(Game):
                 "start": game_states.StartState,
                 "play": game_states.PlayState,
                 "game-over": game_states.GameOverState,
+                "victory": game_states.VictoryState,
             }
         )
         self.state_machine.change("start")

@@ -16,6 +16,8 @@ import pygame
 from gale.tilemap import TileMap
 
 import settings
+from src.Boss import Boss
+from src.Chest import Chest
 from src.definitions.entity import ENTITY_DEFS
 from src.definitions.game_objects import GAME_OBJECT_DEFS
 from src.Entity import Entity
@@ -73,8 +75,10 @@ def _doorway_opening_for(
         None if rect isn't near any doorway right now.
     """
     for direction, zone in _DOORWAY_ZONES.items():
-        if zone.colliderect(rect):
-            return doorways_by_direction[direction].get_collision_rect()
+        doorway = doorways_by_direction.get(direction)
+
+        if doorway and zone.colliderect(rect):
+            return doorway.get_collision_rect()
 
     return None
 
@@ -84,10 +88,17 @@ class Room:
         self,
         player: TypeVar("Player"),
         on_game_over: Callable[[], None],
+        spawn_chest: bool = False,
+        boss_room: bool = False,
+        entry_direction: Optional[str] = None,
+        on_victory: Optional[Callable[[], None]] = None,
     ) -> None:
         # Reference to player for collisions, etc.
         self.player = player
         self.on_game_over = on_game_over
+        self.on_victory = on_victory or (lambda: None)
+        self.is_boss_room = boss_room
+        self.boss_defeated = False
 
         self.width = settings.MAP_WIDTH
         self.height = settings.MAP_HEIGHT
@@ -97,21 +108,32 @@ class Room:
         self._generate_walls_and_floors()
 
         self.entities: List[Entity] = []
-        self._generate_entities()
-
         self.objects: List[GameObject] = []
-        self._generate_objects()
 
-        # Doorways that lead to other dungeon rooms.
-        self.doorways = [
-            Doorway("top", False, self),
-            Doorway("bottom", False, self),
-            Doorway("left", False, self),
-            Doorway("right", False, self),
-        ]
+        if boss_room:
+            if entry_direction not in _DOORWAY_ZONES:
+                raise ValueError("A boss room needs a valid entry direction")
+
+            self._generate_boss(entry_direction)
+            self.doorways = [Doorway(entry_direction, False, self)]
+        else:
+            self._generate_entities()
+            self.doorways = [
+                Doorway("top", False, self),
+                Doorway("bottom", False, self),
+                Doorway("left", False, self),
+                Doorway("right", False, self),
+            ]
+
         self._doorways_by_direction = {
             doorway.direction: doorway for doorway in self.doorways
         }
+
+        if not boss_room:
+            self._generate_objects()
+
+            if spawn_chest:
+                self._generate_chest()
 
         # Used for centering the dungeon rendering.
         self.render_offset_x = settings.MAP_RENDER_OFFSET_X
@@ -136,13 +158,32 @@ class Room:
                 entity.dead = True
 
                 # Chance to drop a heart.
-                if not entity.dropped and random.randint(1, 10) == 1:
+                if (
+                    not getattr(entity, "is_boss", False)
+                    and not entity.dropped
+                    and random.randint(1, 10) == 1
+                ):
                     self.objects.append(
                         GameObject(GAME_OBJECT_DEFS["heart"], entity.x, entity.y)
                     )
 
                 # Whether the entity dropped or not, it is assumed that it did.
                 entity.dropped = True
+
+                if getattr(entity, "is_boss", False) and not self.boss_defeated:
+                    self.boss_defeated = True
+
+                    for doorway in self.doorways:
+                        doorway.open = True
+
+                    settings.SOUNDS["door"].play()
+                    self.entities = [
+                        candidate
+                        for candidate in self.entities
+                        if not candidate.dead
+                    ]
+                    self.on_victory()
+                    return
             elif not entity.dead:
                 entity.process_ai(self, dt)
                 entity.update(dt)
@@ -154,11 +195,12 @@ class Room:
                 and not self.player.invulnerable
             ):
                 settings.SOUNDS["hit-player"].play()
-                self.player.damage(1)
+                self.player.damage(getattr(entity, "contact_damage", 1))
                 self.player.go_invulnerable(1.5)
 
-                if self.player.health == 0:
+                if self.player.health <= 0:
                     self.on_game_over()
+                    return
 
         self.entities = [entity for entity in self.entities if not entity.dead]
 
@@ -178,17 +220,69 @@ class Room:
         for projectile in list(self.projectiles):
             projectile.update(dt)
 
-            for entity in self.entities:
-                if projectile.dead:
-                    break
-
-                if not entity.dead and projectile.collides(entity):
-                    entity.damage(1)
-                    settings.SOUNDS["hit-enemy"].play()
+            if projectile.owner == "boss":
+                if not projectile.dead and projectile.collides(self.player):
+                    self.player.health = 0
                     projectile.dead = True
+                    settings.SOUNDS["hit-player"].play()
+                    self.on_game_over()
+                    return
+            else:
+                for entity in self.entities:
+                    if projectile.dead:
+                        break
+
+                    if not entity.dead and projectile.collides(entity):
+                        if entity.damage(projectile.damage, projectile.damage_type):
+                            settings.SOUNDS["hit-enemy"].play()
+
+                        projectile.dead = True
 
             if projectile.dead:
                 self.projectiles.remove(projectile)
+
+    def interact(self, player: TypeVar("Player")) -> None:
+        """Opens a chest in front of the player, otherwise tries a pot."""
+        player_rect = player.get_collision_rect()
+        reach = settings.TILE_SIZE
+
+        if player.direction == "left":
+            interaction_rect = pygame.Rect(
+                player_rect.left - reach,
+                player_rect.top,
+                reach,
+                player_rect.height,
+            )
+        elif player.direction == "right":
+            interaction_rect = pygame.Rect(
+                player_rect.right,
+                player_rect.top,
+                reach,
+                player_rect.height,
+            )
+        elif player.direction == "up":
+            interaction_rect = pygame.Rect(
+                player_rect.left,
+                player_rect.top - reach,
+                player_rect.width,
+                reach,
+            )
+        else:
+            interaction_rect = pygame.Rect(
+                player_rect.left,
+                player_rect.bottom,
+                player_rect.width,
+                reach,
+            )
+
+        for obj in self.objects:
+            if isinstance(obj, Chest) and interaction_rect.colliderect(
+                obj.get_collision_rect()
+            ):
+                obj.open(player)
+                return
+
+        self.take_adjacent_pot(player)
 
     def _push_player_out_of(self, obj: GameObject) -> None:
         player = self.player
@@ -314,6 +408,50 @@ class Room:
             }
             entity.change_state("walk")
             self.entities.append(entity)
+
+    def _generate_boss(self, entry_direction: Optional[str]) -> None:
+        """Places the skeleton at the wall opposite the room's only door."""
+        center_x = settings.VIRTUAL_WIDTH / 2 - 16
+        center_y = settings.VIRTUAL_HEIGHT / 2 - 16
+        left = settings.MAP_RENDER_OFFSET_X + settings.TILE_SIZE * 3
+        right = settings.VIRTUAL_WIDTH - settings.TILE_SIZE * 5
+        top = settings.MAP_RENDER_OFFSET_Y + settings.TILE_SIZE * 3
+        bottom = (
+            settings.MAP_RENDER_OFFSET_Y
+            + settings.MAP_HEIGHT * settings.TILE_SIZE
+            - settings.TILE_SIZE * 5
+        )
+
+        positions = {
+            "left": (right, center_y),
+            "right": (left, center_y),
+            "top": (center_x, bottom),
+            "bottom": (center_x, top),
+        }
+        x, y = positions[entry_direction]
+        self.entities.append(Boss(x, y))
+
+    def _generate_chest(self) -> None:
+        """Places the dungeon's single chest on an unoccupied floor tile."""
+        positions = [
+            (x * settings.TILE_SIZE, y * settings.TILE_SIZE)
+            for y in range(3, self.height - 3)
+            for x in range(3, self.width - 3)
+        ]
+        random.shuffle(positions)
+
+        for x, y in positions:
+            chest = Chest(x, y)
+            occupied = [*self.objects, *self.entities, self.player]
+
+            if not any(
+                chest.get_collision_rect().colliderect(obj.get_collision_rect())
+                for obj in occupied
+            ):
+                self.objects.append(chest)
+                return
+
+        raise RuntimeError("There is no free floor position for the dungeon chest")
 
     def _generate_objects(self) -> None:
         """Randomly creates an assortment of obstacles for the player to navigate around."""

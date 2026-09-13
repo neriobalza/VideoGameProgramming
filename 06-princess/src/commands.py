@@ -66,6 +66,11 @@ class SwordCommand(Command):
         receiver.sword_requested = True
 
 
+class BowCommand(Command):
+    def execute(self, receiver, dt: float = 0.0) -> None:
+        receiver.bow_requested = True
+
+
 class InteractCommand(Command):
     def execute(self, receiver, dt: float = 0.0) -> None:
         receiver.interact_requested = True
@@ -80,4 +85,5 @@ STOP_MOVE_RIGHT = StopMoveRightCommand()
 STOP_MOVE_UP = StopMoveUpCommand()
 STOP_MOVE_DOWN = StopMoveDownCommand()
 SWORD = SwordCommand()
+BOW = BowCommand()
 INTERACT = InteractCommand()

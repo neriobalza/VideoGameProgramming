@@ -14,6 +14,7 @@ from gale.command import CommandBindings
 from gale.input_handler import InputData
 
 from src.commands import (
+    BOW,
     INTERACT,
     MOVE_DOWN,
     MOVE_LEFT,
@@ -25,6 +26,7 @@ from src.commands import (
     STOP_MOVE_UP,
     SWORD,
 )
+from src.Bow import Bow
 from src.Entity import Entity
 
 
@@ -36,7 +38,11 @@ class Player(Entity):
         # (and cleared) by whichever player state's update() consumes them,
         # the same way jump_requested works in 05-super_martian.
         self.sword_requested = False
+        self.bow_requested = False
         self.interact_requested = False
+
+        # Inventory survives room changes because Dungeon reuses this Player.
+        self.bow = None
 
         self.command_bindings = CommandBindings()
         self.command_bindings.bind("move_left", press=MOVE_LEFT, release=STOP_MOVE_LEFT)
@@ -46,7 +52,28 @@ class Player(Entity):
         self.command_bindings.bind("move_up", press=MOVE_UP, release=STOP_MOVE_UP)
         self.command_bindings.bind("move_down", press=MOVE_DOWN, release=STOP_MOVE_DOWN)
         self.command_bindings.bind("sword", press=SWORD)
+        self.command_bindings.bind("bow", press=BOW)
         self.command_bindings.bind("enter", press=INTERACT)
+
+    @property
+    def has_bow(self) -> bool:
+        return self.bow is not None
+
+    def give_bow(self) -> None:
+        if not self.has_bow:
+            self.bow = Bow()
+
+    def fire_bow(self, room: Any):
+        if self.bow is None:
+            return None
+
+        return self.bow.fire(self, room)
+
+    def update(self, dt: float) -> None:
+        if self.bow:
+            self.bow.update(dt)
+
+        super().update(dt)
 
     def collides(self, target: Any) -> bool:
         """

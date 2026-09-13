@@ -38,7 +38,11 @@ class PlayState(BaseState):
         # Rendering/collision offset for the spaced sprite.
         self.player.offset_y = 5
 
-        self.dungeon = Dungeon(self.player, on_game_over=self._on_game_over)
+        self.dungeon = Dungeon(
+            self.player,
+            on_game_over=self._on_game_over,
+            on_victory=self._on_victory,
+        )
 
         self.player.state_machine.states = {
             "walk": lambda sm: player_states.PlayerWalkState(self.player, sm, self.dungeon),
@@ -67,6 +71,9 @@ class PlayState(BaseState):
     def _on_game_over(self) -> None:
         self.state_machine.change("game-over", player=self.player)
 
+    def _on_victory(self) -> None:
+        self.state_machine.change("victory")
+
     def update(self, dt: float) -> None:
         self.dungeon.update(dt)
 
@@ -92,6 +99,34 @@ class PlayState(BaseState):
             )
 
             health_left -= 2
+
+        if self.player.has_bow:
+            surface.blit(settings.TEXTURES["bow"], (55, 2))
+
+        boss = next(
+            (
+                entity
+                for entity in self.dungeon.current_room.entities
+                if getattr(entity, "is_boss", False)
+            ),
+            None,
+        )
+
+        if boss:
+            bar_width = 96
+            bar_x = settings.VIRTUAL_WIDTH / 2 - bar_width / 2
+            pygame.draw.rect(surface, (40, 20, 20), (bar_x, 4, bar_width, 8))
+            color = (255, 196, 64) if boss.sword_vulnerable else (175, 53, 42)
+            pygame.draw.rect(
+                surface,
+                color,
+                (
+                    bar_x + 1,
+                    5,
+                    (bar_width - 2) * boss.hitpoints / boss.max_hitpoints,
+                    6,
+                ),
+            )
 
     def on_input(self, input_id: str, input_data: InputData) -> None:
         self.player.on_input(input_id, input_data)

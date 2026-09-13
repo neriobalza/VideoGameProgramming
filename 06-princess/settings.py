@@ -24,6 +24,7 @@ input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RIGHT, "move_ri
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_UP, "move_up")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_DOWN, "move_down")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_SPACE, "sword")
+input_handler.InputHandler.set_keyboard_action(input_handler.KEY_x, "bow")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_RETURN, "enter")
 input_handler.InputHandler.set_keyboard_action(input_handler.KEY_KP_ENTER, "enter")
 
@@ -89,7 +90,23 @@ TEXTURES = {
     "character-pot-walk": pygame.image.load(
         BASE_DIR / "assets" / "graphics" / "character_pot_walk.png"
     ),
+    "chest": pygame.transform.scale(
+        pygame.image.load(BASE_DIR / "assets" / "graphics" / "chest.png"),
+        (32, 32),
+    ),
+    "bow": pygame.transform.scale(
+        pygame.image.load(BASE_DIR / "assets" / "graphics" / "bow.png"),
+        (16, 16),
+    ),
+    "arrow": pygame.transform.scale(
+        pygame.image.load(BASE_DIR / "assets" / "graphics" / "arrow.png"),
+        (12, 12),
+    ),
 }
+
+TEXTURES["fireball"] = pygame.Surface((10, 10), pygame.SRCALPHA)
+pygame.draw.circle(TEXTURES["fireball"], (255, 101, 25), (5, 5), 5)
+pygame.draw.circle(TEXTURES["fireball"], (255, 220, 80), (5, 5), 3)
 
 # Used by Room's gale.tilemap.TileMap: TILE_* ids above are 1-based,
 # matching this tileset's default first_gid, so they double as gids.
@@ -106,6 +123,10 @@ FRAMES = {
     "entities": frames.generate_frames(TEXTURES["entities"], 16, 16),
     "character-pot-lift": frames.generate_frames(TEXTURES["character-pot-lift"], 16, 32),
     "character-pot-walk": frames.generate_frames(TEXTURES["character-pot-walk"], 16, 32),
+    "chest": frames.generate_frames(TEXTURES["chest"], 32, 32),
+    "bow": frames.generate_frames(TEXTURES["bow"], 16, 16),
+    "arrow": frames.generate_frames(TEXTURES["arrow"], 12, 12),
+    "fireball": frames.generate_frames(TEXTURES["fireball"], 10, 10),
 }
 
 
