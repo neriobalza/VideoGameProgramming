@@ -89,6 +89,9 @@ Cada personaje se mueve en todas las direcciones únicamente con el método de e
 que confirmó ese personaje, dentro de los límites de la pantalla. En el teclado,
 **W** mueve arriba, **A** a la izquierda, **S** abajo y **D** a la derecha;
 las flechas se utilizan para la selección y los menús.
+El movimiento diagonal está normalizado: su velocidad máxima es la misma que
+al moverse por un solo eje. El joystick conserva la velocidad proporcional
+a su inclinación cuando el vector de entrada tiene longitud menor que uno.
 Hay una zona muerta para evitar movimiento por pequeñas desviaciones del joystick.
 Al desconectar un mando se vuelve a selección, conservando el jugador conectado (o el teclado) y
 dejando libre el lado del desconectado. Un mando reconectado debe pulsar A y elegir
@@ -99,6 +102,20 @@ Ambos jugadores utilizan `assets/graphics/player_walk.png`, con fotogramas de
 del movimiento y permanecen quietos mirando hacia su última dirección al detenerse.
 Cada jugador mantiene su propio estado de animación. `PLAYER_FRAME_INTERVAL` en
 `settings.py` permite ajustar la duración de cada fotograma.
+
+## Escenario
+
+La partida transcurre en una sala basada en `06-princess`, con sus mismos
+tiles de suelo, paredes y esquinas. El tilesheet se incluye como una copia
+local en `assets/graphics/tilesheet.png`, por lo que Underpaid puede ejecutarse
+sin depender de la carpeta del otro proyecto.
+
+`src/world/Room.py` construye la sala de 18 × 12 tiles. Los tiles originales
+de 16 × 16 píxeles se dibujan a 32 × 32 para mantener la escala de los personajes.
+Ambos jugadores aparecen dentro de la sala y las paredes delimitan su movimiento.
+La colisión utiliza la mitad inferior del personaje, donde apoya los pies, para
+alcanzar todos los tiles de suelo junto a las paredes. La cabeza y el torso pueden
+superponerse a la pared superior, dando perspectiva sin atravesar los límites del suelo.
 
 ## Verificación
 

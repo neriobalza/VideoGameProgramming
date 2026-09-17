@@ -195,6 +195,80 @@ class ControllerTests(unittest.TestCase):
         self.assertLess(p1.position.x, 640)
         self.assertLess(p1.position.y, 480)
 
+    def test_room_uses_princess_floor_walls_and_corners(self):
+        room = self.play().room
+        grid = room.tilemap.get_layer('floor')
+        self.assertEqual(grid[0][0], settings.TILE_TOP_LEFT_CORNER)
+        self.assertEqual(grid[0][-1], settings.TILE_TOP_RIGHT_CORNER)
+        self.assertEqual(grid[-1][0], settings.TILE_BOTTOM_LEFT_CORNER)
+        self.assertEqual(grid[-1][-1], settings.TILE_BOTTOM_RIGHT_CORNER)
+        for tile in grid[0][1:-1]:
+            self.assertIn(tile, settings.TILE_TOP_WALLS)
+        for tile in grid[-1][1:-1]:
+            self.assertIn(tile, settings.TILE_BOTTOM_WALLS)
+        for row in grid[1:-1]:
+            self.assertIn(row[0], settings.TILE_LEFT_WALLS)
+            self.assertIn(row[-1], settings.TILE_RIGHT_WALLS)
+            for tile in row[1:-1]:
+                self.assertIn(tile, settings.TILE_FLOORS)
+                self.assertIsNotNone(room.tilemap.tileset_for_gid(tile))
+        self.assertTrue(pygame.Rect(0, 0, 640, 480).contains(room.bounds))
+
+    def test_both_players_remain_inside_room_walls(self):
+        state = self.play()
+        bounds = state.room.walkable_area
+        for player in state.players.values():
+            self.assertTrue(bounds.collidepoint(player.position))
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1)):
+                self.axis(player.controller_id, dx)
+                self.axis(player.controller_id, dy, pygame.CONTROLLER_AXIS_LEFTY)
+                self.game.update(100)
+                self.assertTrue(bounds.contains(player.hitbox))
+            self.axis(player.controller_id, 0)
+            self.axis(player.controller_id, 0, pygame.CONTROLLER_AXIS_LEFTY)
+
+    def test_players_reach_edge_floor_tiles_and_overlap_upper_wall(self):
+        state = self.play()
+        bounds = state.room.walkable_area
+        top_wall = pygame.Rect(state.room.bounds.left, state.room.bounds.top,
+                               state.room.bounds.width, settings.TILE_RENDER_SIZE)
+        for player in state.players.values():
+            for dx, dy, edge in ((-1, 0, 'left'), (1, 0, 'right'),
+                                 (0, 1, 'bottom'), (0, -1, 'top')):
+                self.axis(player.controller_id, dx)
+                self.axis(player.controller_id, dy, pygame.CONTROLLER_AXIS_LEFTY)
+                self.game.update(100)
+                self.assertEqual(getattr(player.hitbox, edge), getattr(bounds, edge))
+                self.assertTrue(bounds.contains(player.hitbox))
+            frame = player.animation.get_current_frame()
+            sprite_rect = frame.get_rect(center=player.position)
+            visible_sprite = frame.get_bounding_rect().move(sprite_rect.topleft)
+            self.assertTrue(visible_sprite.colliderect(top_wall))
+            self.assertFalse(bounds.contains(sprite_rect))
+            self.axis(player.controller_id, 0)
+            self.axis(player.controller_id, 0, pygame.CONTROLLER_AXIS_LEFTY)
+
+    def test_keyboard_player_can_reach_first_and_last_floor_rows(self):
+        state = self.keyboard_play()
+        player = state.players[1]
+        bounds = state.room.walkable_area
+        self.key(pygame.K_w)
+        self.game.update(100)
+        self.assertEqual(player.hitbox.top, bounds.top)
+        self.key(pygame.K_w, pressed=False)
+        self.key(pygame.K_s)
+        self.game.update(100)
+        self.assertEqual(player.hitbox.bottom, bounds.bottom)
+        self.assertTrue(bounds.contains(player.hitbox))
+
+    def test_room_background_is_visible_in_play(self):
+        state = self.play()
+        self.game._Game__render()
+        background = state.room.background
+        for point in ((40, 100), (320, 100), (320, 360)):
+            local = (point[0] - state.room.bounds.x, point[1] - state.room.bounds.y)
+            self.assertEqual(self.game.render_surface.get_at(point), background.get_at(local))
+
     def test_disconnect_frees_only_owner_slot_and_reconnect_requires_join(self):
         state = self.play()
         survivor = state.players[2]
@@ -440,6 +514,28 @@ class ControllerTests(unittest.TestCase):
         self.game.update(0.1)
         self.assertEqual(keyboard.position, position)
         self.assertGreater(gamepad.position.x, gamepad_position.x)
+
+    def test_diagonal_speed_matches_axes_for_keyboard_and_controller(self):
+        state = self.keyboard_play()
+        dt = 0.1
+        keyboard_keys = (pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                       (1, 1), (-1, 1), (1, -1), (-1, -1)):
+            with self.subTest(direction=(dx, dy)):
+                for key in keyboard_keys:
+                    self.key(key, pressed=False)
+                for player in state.players.values():
+                    player.position.update(320, 240)
+                self.axis(71, dx)
+                self.axis(71, dy, pygame.CONTROLLER_AXIS_LEFTY)
+                if dx:
+                    self.key(pygame.K_d if dx > 0 else pygame.K_a)
+                if dy:
+                    self.key(pygame.K_s if dy > 0 else pygame.K_w)
+                self.game.update(dt)
+                for player in state.players.values():
+                    distance = (player.position - pygame.Vector2(320, 240)).length()
+                    self.assertAlmostEqual(distance, settings.PLAYER_SPEED * dt, delta=0.001)
 
     def test_keyboard_diagonals_and_opposing_keys(self):
         keyboard = self.keyboard_play().players[1]

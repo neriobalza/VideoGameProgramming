@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from gale.input_handler import InputHandler
+from gale.tilemap import Tileset
 
 
 TITLE = "Underpaid"
@@ -39,12 +40,47 @@ PLAYER_COLORS = {1: (82, 169, 255), 2: (255, 116, 128)}
 PLAYER_SPEED = 180
 PLAYER_FRAME_WIDTH = 32
 PLAYER_FRAME_HEIGHT = 64
+# Sólo la mitad inferior del personaje ocupa espacio en el suelo.
+PLAYER_COLLISION_WIDTH = PLAYER_FRAME_WIDTH
+PLAYER_COLLISION_HEIGHT = PLAYER_FRAME_HEIGHT // 2
 PLAYER_FRAME_INTERVAL = 0.12
 STICK_DEADZONE = 0.2
 SELECTION_THRESHOLD = 0.6
 KEYBOARD_INPUT = "keyboard"
 
 BASE_DIR = Path(__file__).resolve().parent
+
+# La sala reutiliza los tiles e IDs de 06-princess, a escala 2:1.
+TILE_SIZE = 16
+TILE_SCALE = 2
+TILE_RENDER_SIZE = TILE_SIZE * TILE_SCALE
+MAP_WIDTH = VIRTUAL_WIDTH // TILE_RENDER_SIZE - 2
+MAP_HEIGHT = VIRTUAL_HEIGHT // TILE_RENDER_SIZE - 3
+MAP_RENDER_OFFSET_X = (VIRTUAL_WIDTH - MAP_WIDTH * TILE_RENDER_SIZE) // 2
+MAP_RENDER_OFFSET_Y = (VIRTUAL_HEIGHT - MAP_HEIGHT * TILE_RENDER_SIZE) // 2
+
+TILE_TOP_LEFT_CORNER = 4
+TILE_TOP_RIGHT_CORNER = 5
+TILE_BOTTOM_LEFT_CORNER = 23
+TILE_BOTTOM_RIGHT_CORNER = 24
+TILE_FLOORS = (
+    7, 8, 9, 10, 11, 12, 13,
+    26, 27, 28, 29, 30, 31, 32,
+    45, 46, 47, 48, 49, 50, 51,
+    64, 65, 66, 67, 68, 69, 70,
+    88, 89, 107, 108,
+)
+TILE_TOP_WALLS = (58, 59, 60)
+TILE_BOTTOM_WALLS = (79, 80, 81)
+TILE_LEFT_WALLS = (77, 96, 115)
+TILE_RIGHT_WALLS = (78, 97, 116)
+
+
+@lru_cache(maxsize=1)
+def load_room_tileset() -> Tileset:
+    sheet = pygame.image.load(BASE_DIR / "assets" / "graphics" / "tilesheet.png").convert_alpha()
+    sheet = pygame.transform.scale(sheet, (sheet.get_width() * TILE_SCALE, sheet.get_height() * TILE_SCALE))
+    return Tileset(sheet, TILE_RENDER_SIZE, TILE_RENDER_SIZE)
 
 
 @lru_cache(maxsize=1)

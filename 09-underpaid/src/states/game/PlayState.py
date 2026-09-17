@@ -4,6 +4,7 @@ from gale.state import BaseState
 
 import settings
 from src.gui.Menu import draw_text
+from src.world.Room import Room
 
 
 class PlayState(BaseState):
@@ -13,10 +14,10 @@ class PlayState(BaseState):
 
     def enter(self, players) -> None:
         self.players = dict(players)
+        self.room = Room()
         for player in self.players.values():
             player.stop()
-            player.position.update(settings.VIRTUAL_WIDTH * (0.25 if player.number == 1 else 0.75),
-                                   settings.VIRTUAL_HEIGHT / 2)
+            player.position.update(self.room.spawn_position(player.number))
 
     def update(self, dt: float) -> None:
         connected = {
@@ -27,7 +28,7 @@ class PlayState(BaseState):
             self.state_machine.change("player_select", players=connected)
             return
         for player in self.players.values():
-            player.update(dt)
+            player.update(dt, self.room.walkable_area)
 
     def on_input(self, input_id, input_data) -> None:
         if input_id == "back" and input_data.pressed:
@@ -38,11 +39,10 @@ class PlayState(BaseState):
 
     def render(self, surface) -> None:
         surface.fill(settings.BACKGROUND_COLOR)
-        draw_text(surface, "UNDERPAID", self.game.fonts["large"], 55,
+        self.room.render(surface)
+        draw_text(surface, "UNDERPAID", self.game.fonts["medium"], 23,
                   settings.ACCENT_COLOR)
-        draw_text(surface, "Movimiento: joystick izquierdo / WASD según tu entrada",
-                  self.game.fonts["small"], 93, settings.MUTED_COLOR)
-        for player in self.players.values():
+        for player in sorted(self.players.values(), key=lambda player: player.position.y):
             player.render(surface)
-        draw_text(surface, "Esc: volver al menú", self.game.fonts["small"], 455,
+        draw_text(surface, "Joystick / WASD: mover · Esc: volver al menú", self.game.fonts["small"], 457,
                   settings.MUTED_COLOR)

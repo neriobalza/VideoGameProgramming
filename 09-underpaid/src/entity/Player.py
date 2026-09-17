@@ -31,6 +31,16 @@ class Player:
     def is_connected(self, controllers) -> bool:
         return self.uses_keyboard or controllers.is_connected(self.controller_id)
 
+    @property
+    def hitbox(self) -> pygame.Rect:
+        """Área de apoyo en el suelo; la cabeza puede sobresalir sobre paredes."""
+        return pygame.Rect(
+            round(self.position.x - settings.PLAYER_COLLISION_WIDTH / 2),
+            round(self.position.y + settings.PLAYER_FRAME_HEIGHT / 2 - settings.PLAYER_COLLISION_HEIGHT),
+            settings.PLAYER_COLLISION_WIDTH,
+            settings.PLAYER_COLLISION_HEIGHT,
+        )
+
     def select(self, number: int) -> None:
         if self.number is not None:
             raise ValueError("El jugador ya tiene un lado asignado")
@@ -78,15 +88,25 @@ class Player:
         else:
             self.direction.y = value
 
-    def update(self, dt: float) -> None:
+    def update(self, dt: float, bounds: pygame.Rect | None = None) -> None:
         direction = self.direction.copy()
+        # Limitar la longitud a 1 iguala la velocidad máxima en ejes y
+        # diagonales, conservando el movimiento lento del joystick analógico.
         if direction.length_squared() > 1:
             direction.normalize_ip()
         self.position += direction * settings.PLAYER_SPEED * dt
         half_width = settings.PLAYER_FRAME_WIDTH / 2
         half_height = settings.PLAYER_FRAME_HEIGHT / 2
-        self.position.x = max(half_width, min(settings.VIRTUAL_WIDTH - half_width, self.position.x))
-        self.position.y = max(half_height, min(settings.VIRTUAL_HEIGHT - half_height, self.position.y))
+        if bounds is None:
+            self.position.x = max(half_width, min(settings.VIRTUAL_WIDTH - half_width, self.position.x))
+            self.position.y = max(half_height, min(settings.VIRTUAL_HEIGHT - half_height, self.position.y))
+        else:
+            # El límite de la sala afecta al apoyo de los pies, dejando libre
+            # la parte superior del sprite para dibujarse sobre la pared.
+            half_collision_width = settings.PLAYER_COLLISION_WIDTH / 2
+            top_offset = half_height - settings.PLAYER_COLLISION_HEIGHT
+            self.position.x = max(bounds.left + half_collision_width, min(bounds.right - half_collision_width, self.position.x))
+            self.position.y = max(bounds.top - top_offset, min(bounds.bottom - half_height, self.position.y))
         if direction.length_squared() == 0:
             self.animation.reset()
             return
