@@ -1,6 +1,7 @@
 """Personaje vinculado exclusivamente a un mando o al teclado."""
 
 import pygame
+from gale.animation import Animation
 
 import settings
 
@@ -12,6 +13,12 @@ class Player:
         self.position = pygame.Vector2(settings.VIRTUAL_WIDTH / 2, 260)
         self.direction = pygame.Vector2()
         self.keyboard_keys: set[int] = set()
+        self.facing = "down"
+        self.animations = {
+            direction: Animation(frames, settings.PLAYER_FRAME_INTERVAL)
+            for direction, frames in settings.load_player_frames().items()
+        }
+        self.animation = self.animations[self.facing]
 
     @property
     def uses_keyboard(self) -> bool:
@@ -36,6 +43,7 @@ class Player:
     def stop(self) -> None:
         self.direction.update(0, 0)
         self.keyboard_keys.clear()
+        self.animation.reset()
 
     def unselect(self) -> None:
         self.number = None
@@ -75,12 +83,24 @@ class Player:
         if direction.length_squared() > 1:
             direction.normalize_ip()
         self.position += direction * settings.PLAYER_SPEED * dt
-        half_size = settings.PLAYER_SIZE / 2
-        self.position.x = max(half_size, min(settings.VIRTUAL_WIDTH - half_size, self.position.x))
-        self.position.y = max(half_size, min(settings.VIRTUAL_HEIGHT - half_size, self.position.y))
+        half_width = settings.PLAYER_FRAME_WIDTH / 2
+        half_height = settings.PLAYER_FRAME_HEIGHT / 2
+        self.position.x = max(half_width, min(settings.VIRTUAL_WIDTH - half_width, self.position.x))
+        self.position.y = max(half_height, min(settings.VIRTUAL_HEIGHT - half_height, self.position.y))
+        if direction.length_squared() == 0:
+            self.animation.reset()
+            return
+        if abs(direction.x) > abs(direction.y):
+            facing = "right" if direction.x > 0 else "left"
+        else:
+            facing = "down" if direction.y > 0 else "up"
+        if facing != self.facing:
+            self.facing = facing
+            self.animation = self.animations[facing]
+            self.animation.reset()
+        self.animation.update(dt)
 
-    def render(self, surface, color=None) -> None:
-        color = color or settings.PLAYER_COLORS.get(self.number, settings.MUTED_COLOR)
-        rect = pygame.Rect(0, 0, settings.PLAYER_SIZE, settings.PLAYER_SIZE)
-        rect.center = (round(self.position.x), round(self.position.y))
-        pygame.draw.rect(surface, color, rect)
+    def render(self, surface) -> None:
+        frame = self.animation.get_current_frame()
+        rect = frame.get_rect(center=(round(self.position.x), round(self.position.y)))
+        surface.blit(frame, rect)

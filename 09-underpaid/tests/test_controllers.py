@@ -300,7 +300,7 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(set(state.players), {1})
         self.assertIsInstance(self.game.state_machine.current, PlayerSelectState)
 
-    def test_play_draws_squares_and_supports_all_movement_directions(self):
+    def test_play_draws_sprite_and_supports_all_movement_directions(self):
         state = self.play()
         p1 = state.players[1]
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)):
@@ -317,11 +317,44 @@ class ControllerTests(unittest.TestCase):
             self.assertAlmostEqual(movement.length(), settings.PLAYER_SPEED * 0.1, delta=0.001)
         surface = pygame.Surface((640, 480))
         surface.fill(settings.BACKGROUND_COLOR)
+        p1.direction.update(0, 1)
+        p1.update(0.01)
+        p1.stop()
         p1.position.update(160, 240)
         p1.render(surface)
-        self.assertEqual(surface.get_at((144, 224))[:3], settings.PLAYER_COLORS[1])
-        self.assertEqual(surface.get_at((175, 255))[:3], settings.PLAYER_COLORS[1])
-        self.assertEqual(surface.get_at((176, 256))[:3], settings.BACKGROUND_COLOR)
+        expected = pygame.Surface((640, 480))
+        expected.fill(settings.BACKGROUND_COLOR)
+        sheet = pygame.image.load(settings.BASE_DIR / 'assets' / 'graphics' / 'player_walk.png')
+        expected.blit(sheet, (144, 208), pygame.Rect(0, 0, 32, 64))
+        self.assertEqual(pygame.image.tobytes(surface, 'RGB'), pygame.image.tobytes(expected, 'RGB'))
+
+    def test_walk_animation_is_independent_and_stops_in_last_direction(self):
+        state = self.play()
+        p1, p2 = state.players[1], state.players[2]
+        self.axis(71, 1)
+        self.game.update(settings.PLAYER_FRAME_INTERVAL)
+        self.assertEqual(p1.facing, 'right')
+        self.assertEqual(p1.animation.current_frame_index, 1)
+        self.assertEqual(p2.facing, 'down')
+        self.assertEqual(p2.animation.current_frame_index, 0)
+        self.assertIsNot(p1.animation, p2.animation)
+        self.axis(71, 0)
+        self.game.update(settings.PLAYER_FRAME_INTERVAL * 2)
+        self.assertEqual(p1.facing, 'right')
+        self.assertEqual(p1.animation.current_frame_index, 0)
+
+    def test_walk_uses_correct_spritesheet_row_for_each_direction(self):
+        player = self.play().players[1]
+        sheet = pygame.image.load(settings.BASE_DIR / 'assets' / 'graphics' / 'player_walk.png')
+        for dx, dy, facing, row in ((0, 1, 'down', 0), (1, 0, 'right', 1),
+                                    (0, -1, 'up', 2), (-1, 0, 'left', 3)):
+            self.axis(71, dx)
+            self.axis(71, dy, pygame.CONTROLLER_AXIS_LEFTY)
+            self.game.update(settings.PLAYER_FRAME_INTERVAL)
+            self.assertEqual(player.facing, facing)
+            frame = player.animation.get_current_frame()
+            expected = sheet.subsurface(pygame.Rect(32, row * 64, 32, 64))
+            self.assertEqual(pygame.image.tobytes(frame, 'RGBA'), pygame.image.tobytes(expected, 'RGBA'))
 
     def test_enter_registers_keyboard_once_and_space_does_not_register(self):
         self.devices.clear()

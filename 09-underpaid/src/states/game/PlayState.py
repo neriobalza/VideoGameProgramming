@@ -1,4 +1,4 @@
-"""Dos cuadrados, cada uno controlado por su método de entrada asignado."""
+"""Dos personajes animados con métodos de entrada independientes."""
 
 from gale.state import BaseState
 

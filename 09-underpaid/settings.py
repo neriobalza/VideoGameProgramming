@@ -1,6 +1,8 @@
 """Configuración de pantalla, controles y colores de Underpaid."""
 
 import pygame
+from functools import lru_cache
+from pathlib import Path
 
 from gale.input_handler import InputHandler
 
@@ -35,10 +37,30 @@ ACCENT_COLOR = (246, 190, 76)
 
 PLAYER_COLORS = {1: (82, 169, 255), 2: (255, 116, 128)}
 PLAYER_SPEED = 180
-PLAYER_SIZE = 32
+PLAYER_FRAME_WIDTH = 32
+PLAYER_FRAME_HEIGHT = 64
+PLAYER_FRAME_INTERVAL = 0.12
 STICK_DEADZONE = 0.2
 SELECTION_THRESHOLD = 0.6
 KEYBOARD_INPUT = "keyboard"
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+@lru_cache(maxsize=1)
+def load_player_frames() -> dict[str, tuple[pygame.Surface, ...]]:
+    """Carga una vez el spritesheet; cada jugador conserva su propio reloj."""
+    sheet = pygame.image.load(BASE_DIR / "assets" / "graphics" / "player_walk.png").convert_alpha()
+    return {
+        direction: tuple(
+            sheet.subsurface(pygame.Rect(
+                column * PLAYER_FRAME_WIDTH, row * PLAYER_FRAME_HEIGHT,
+                PLAYER_FRAME_WIDTH, PLAYER_FRAME_HEIGHT,
+            )).copy()
+            for column in range(4)
+        )
+        for row, direction in enumerate(("down", "right", "up", "left"))
+    }
 
 
 def create_fonts() -> dict[str, pygame.font.Font]:

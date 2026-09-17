@@ -153,22 +153,22 @@ class PlayerSelectState(BaseState):
         for index, (instance_id, player) in enumerate(self.participants.items()):
             choice = self.choices[instance_id]
             x = {1: 160, None: 320, 2: 480}[choice]
-            y = 235 + index * 95
+            y = 245 + index * 90
             color = settings.PLAYER_COLORS.get(choice, settings.MUTED_COLOR)
             player.position.update(x, y)
-            player.render(surface, color=color)
+            player.render(surface)
             if player.uses_keyboard:
                 device = "Teclado"
             else:
                 controller_number += 1
                 device = f"Mando {controller_number}"
             label = self.game.fonts["small"].render(device, True, color)
-            surface.blit(label, label.get_rect(center=(x, y - 30)))
+            surface.blit(label, label.get_rect(center=(x, y - 40)))
             confirm_key = "Enter" if player.uses_keyboard else "A"
             cancel_key = "Delete" if player.uses_keyboard else "B"
             status = f"Listo · {cancel_key}" if player.number else f"{confirm_key}: listo" if choice else "Elige lado"
             label = self.game.fonts["small"].render(status, True, color)
-            surface.blit(label, label.get_rect(center=(x, y + 32)))
+            surface.blit(label, label.get_rect(center=(x, y + 40)))
         draw_text(surface, self.message, self.game.fonts["small"], 418)
         draw_text(surface, "La partida comienza cuando ambos confirman · Esc: volver",
                   self.game.fonts["small"], 452, settings.MUTED_COLOR)

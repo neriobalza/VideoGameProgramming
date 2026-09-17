@@ -73,7 +73,7 @@ un jugador: pulsa A o Enter de nuevo para entrar en el centro.
 | Entrar en selección / confirmar | A | Enter |
 | Recorrer izquierda, centro y derecha | Joystick izquierdo | Flechas izquierda/derecha |
 | Cancelar confirmación | B | Delete (también Backspace) |
-| Mover el cuadrado en la partida | Joystick izquierdo | W/A/S/D |
+| Mover el personaje en la partida | Joystick izquierdo | W/A/S/D |
 
 1. Pulsa **A en el mando o Enter en el teclado** para aparecer en el centro.
 2. Usa el joystick izquierdo o las flechas para recorrer **Player 1 ↔ centro ↔ Player 2**.
@@ -83,9 +83,9 @@ un jugador: pulsa A o Enter de nuevo para entrar en el centro.
 4. Pulsa **B o Delete** para cancelar tu confirmación, liberar el personaje y seguir
    escogiendo. Un personaje confirmado por el otro jugador no puede seleccionarse.
 5. Cuando ambos jugadores confirmen personajes diferentes, se abre la pantalla
-   de juego con **dos cuadrados**.
+   de juego con **dos personajes animados**.
 
-Cada cuadrado se mueve en todas las direcciones únicamente con el método de entrada
+Cada personaje se mueve en todas las direcciones únicamente con el método de entrada
 que confirmó ese personaje, dentro de los límites de la pantalla. En el teclado,
 **W** mueve arriba, **A** a la izquierda, **S** abajo y **D** a la derecha;
 las flechas se utilizan para la selección y los menús.
@@ -93,6 +93,12 @@ Hay una zona muerta para evitar movimiento por pequeñas desviaciones del joysti
 Al desconectar un mando se vuelve a selección, conservando el jugador conectado (o el teclado) y
 dejando libre el lado del desconectado. Un mando reconectado debe pulsar A y elegir
 el lado libre y confirmarlo con A.
+
+Ambos jugadores utilizan `assets/graphics/player_walk.png`, con fotogramas de
+32 × 64 píxeles y cuatro fotogramas por dirección. Caminan mirando en la dirección
+del movimiento y permanecen quietos mirando hacia su última dirección al detenerse.
+Cada jugador mantiene su propio estado de animación. `PLAYER_FRAME_INTERVAL` en
+`settings.py` permite ajustar la duración de cada fotograma.
 
 ## Verificación
 
