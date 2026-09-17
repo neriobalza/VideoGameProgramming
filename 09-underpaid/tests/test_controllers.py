@@ -10,6 +10,7 @@ os.environ.setdefault("SDL_RENDER_DRIVER", "software")
 
 import pygame
 from gale.input_handler import InputHandler
+from gale.timer import Timer
 
 from src.Underpaid import Underpaid
 from src.states.game.PlayerSelectState import PlayerSelectState
@@ -32,6 +33,8 @@ class Device:
 
 class ControllerTests(unittest.TestCase):
     def setUp(self):
+        Timer.clear()
+        self.addCleanup(Timer.clear)
         self.devices = [Device(71), Device(203)]
         for target, replacement in (
             ("pygame.joystick.get_count", lambda: len(self.devices)),
@@ -213,7 +216,7 @@ class ControllerTests(unittest.TestCase):
             for tile in row[1:-1]:
                 self.assertIn(tile, settings.TILE_FLOORS)
                 self.assertIsNotNone(room.tilemap.tileset_for_gid(tile))
-        self.assertEqual(room.bounds, pygame.Rect(0, 0, 640, 480))
+        self.assertEqual(room.bounds, pygame.Rect(0, 32, 640, 448))
 
     def test_both_players_remain_inside_room_walls(self):
         state = self.play()
@@ -795,6 +798,50 @@ class ControllerTests(unittest.TestCase):
         self.assertIs(other.carrying, obj)
         self.assertIsNone(player.carrying)
         self.assertIs(obj.carrier, other)
+
+    def test_work_clock_advances_with_gale_timer_and_finishes_at_four_pm(self):
+        state = self.play()
+        self.assertEqual(state.clock_text, '8:00 AM')
+        self.game._Game__update(0.5)
+        self.assertEqual(state.clock_text, '8:00 AM')
+        self.game._Game__update(0.5)
+        self.assertEqual(state.clock_text, '8:01 AM')
+        self.game._Game__update(59)
+        self.assertEqual(state.clock_text, '9:00 AM')
+        self.game._Game__update(180)
+        self.assertEqual(state.clock_text, '12:00 PM')
+        self.game._Game__update(239.5)
+        self.assertIs(self.game.state_machine.current, state)
+        self.assertEqual(state.clock_text, '3:59 PM')
+        self.game._Game__update(0.5)
+        self.assertEqual(state.clock_text, '4:00 PM')
+        self.assertEqual(type(self.game.state_machine.current).__name__, 'MainMenuState')
+        self.assertNotIn(state.match_clock, Timer.items)
+
+    def test_exiting_match_cancels_clock_and_new_match_starts_at_eight_am(self):
+        old = self.play()
+        self.game._Game__update(100)
+        self.game.state_machine.change('main_menu')
+        self.assertTrue(old.match_clock.to_remove)
+        new = self.play()
+        self.assertEqual(new.clock_text, '8:00 AM')
+        self.game._Game__update(380)
+        self.assertIs(self.game.state_machine.current, new)
+        self.assertEqual(new.clock_text, '2:20 PM')
+        self.assertNotIn(old.match_clock, Timer.items)
+
+    def test_clock_strip_is_above_room_and_does_not_shorten_bottom_edge(self):
+        state = self.play()
+        self.assertEqual(state.room.bounds.top, settings.TILE_RENDER_SIZE)
+        self.assertEqual(state.room.bounds.bottom, settings.VIRTUAL_HEIGHT)
+        self.game._Game__render()
+        surface = self.game.render_surface
+        self.assertEqual(surface.get_at((10, 16))[:3], settings.CLOCK_BAR_COLOR)
+        # El centro de la franja incluye los píxeles del texto del reloj.
+        rect = pygame.Rect(280, 0, 80, settings.CLOCK_BAR_HEIGHT)
+        self.assertTrue(any(surface.get_at((x, y))[:3] != settings.CLOCK_BAR_COLOR
+                            for x in range(rect.left, rect.right)
+                            for y in range(rect.top, rect.bottom)))
 
     def test_keyboard_diagonals_and_opposing_keys(self):
         keyboard = self.keyboard_play().players[1]

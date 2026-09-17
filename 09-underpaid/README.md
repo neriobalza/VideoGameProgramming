@@ -111,13 +111,27 @@ tiles de suelo, paredes y esquinas. El tilesheet se incluye como una copia
 local en `assets/graphics/tilesheet.png`, por lo que Underpaid puede ejecutarse
 sin depender de la carpeta del otro proyecto.
 
-`src/world/Room.py` construye la sala de 20 × 15 tiles, que ocupa toda la pantalla
-virtual de 640 × 480, sin textos superpuestos durante la partida. Los tiles originales
+`src/world/Room.py` construye la sala de 20 × 14 tiles. Comienza 32 píxeles más abajo
+para reservar una franja blanca superior para el reloj, y llega hasta el borde inferior
+de la pantalla virtual de 640 × 480. Los tiles originales
 de 16 × 16 píxeles se dibujan a 32 × 32 para mantener la escala de los personajes.
 Ambos jugadores aparecen dentro de la sala y las paredes delimitan su movimiento.
 La colisión utiliza la mitad inferior del personaje, donde apoya los pies, para
 alcanzar todos los tiles de suelo junto a las paredes. La cabeza y el torso pueden
 superponerse a la pared superior, dando perspectiva sin atravesar los límites del suelo.
+
+## Duración de la partida
+
+Cada partida dura **8 minutos**. El reloj aparece arriba, centrado sobre una
+franja blanca de un tile de alto, y avanza desde **8:00 AM** hasta **4:00 PM**,
+como un horario de trabajo. Cada minuto real equivale a una hora del juego:
+tras cuatro minutos reales marca **12:00 PM**.
+Se implementa con `gale.timer.Timer.tween`, actualizado por el bucle de Gale.
+Cuando termina el tiempo se vuelve al menú principal. Salir de la partida cancela
+su reloj; una nueva partida comienza a las **8:00 AM**.
+`CLOCK_START_HOUR`, `CLOCK_END_HOUR` y `SECONDS_PER_GAME_HOUR` en `settings.py`
+definen el horario y la velocidad del reloj; `MATCH_DURATION` calcula la duración
+en segundos reales.
 
 ## Objetos levantables
 
