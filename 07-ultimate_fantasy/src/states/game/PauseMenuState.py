@@ -7,11 +7,9 @@ alejandro.j.mujic4@gmail.com
 
 This file contains the class PauseMenuState: pushed on top of PlayState
 (which keeps rendering, frozen, underneath it) when the player presses
-the pause key. Offers Continue/Save/Load another/Quit -- the canonical
-"menu over a paused game" use case StateStack was introduced for back in
-Chapter 8. Loading another save or quitting first warns (via
-ConfirmState) if the current game has progress since its last save (see
-World.dirty), and proceeds however the player answers.
+the pause key. It provides party status/healing as well as the existing
+continue/save/load/quit flows. Loading another save or quitting first
+warns (via ConfirmState) if the current game has unsaved progress.
 """
 
 from typing import Any
@@ -43,6 +41,7 @@ class PauseMenuState(BaseState):
             96,
             items=[
                 ("Continue", self.close),
+                ("Party status / Heal", self._show_party_status),
                 ("Save game", self._save),
                 ("Load another game", self._load_another),
                 ("Quit", self._quit),
@@ -52,6 +51,13 @@ class PauseMenuState(BaseState):
 
     def close(self) -> None:
         self.state_machine.pop()
+
+    def _show_party_status(self) -> None:
+        from src.states.game.PartyStatusState import PartyStatusState
+
+        self.state_machine.push(
+            PartyStatusState(self.state_machine), play_state=self.play_state
+        )
 
     # -- save --------------------------------------------------------------
 

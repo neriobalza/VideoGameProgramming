@@ -15,7 +15,7 @@ opening dialogue -> BattleMenuState turn loop.
 
 import math
 import random
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 import pygame
 
@@ -44,6 +44,8 @@ class BattleState(BaseState):
         self.on_exit = on_exit
         self.final_boss = False
         self.battle_started = False
+        self.turns_enabled = False
+        self.turn_in_progress = False
 
         self.tilemap = TileMap(
             settings.TILE_SIZE, settings.TILE_SIZE, BATTLE_WIDTH, BATTLE_HEIGHT
@@ -101,6 +103,7 @@ class BattleState(BaseState):
                     "baseAttack": enemy_def["baseAttack"],
                     "baseDefense": enemy_def["baseDefense"],
                     "baseMagic": enemy_def["baseMagic"],
+                    "restTime": enemy_def.get("restTime", 2.0),
                     "actions": enemy_def["actions"],
                     "direction": "left",
                     "map_x": position["x"],
@@ -146,6 +149,16 @@ class BattleState(BaseState):
                 color=pygame.Color(32, 32, 189),
                 theme=BAR_THEME,
             )
+            character.rest_bar = ProgressBar(
+                character.x - (width - character.width) / 2,
+                character.y - 2,
+                width,
+                3,
+                value=character.rest_timer,
+                max_value=character.rest_time,
+                color=pygame.Color(230, 190, 32),
+                theme=BAR_THEME,
+            )
 
         for enemy in self.enemies:
             width = math.floor(enemy.width * 1.5)
@@ -159,6 +172,69 @@ class BattleState(BaseState):
                 color=pygame.Color(189, 32, 32),
                 theme=BAR_THEME,
             )
+            enemy.rest_bar = ProgressBar(
+                enemy.x - (width - enemy.width) / 2,
+                enemy.y - 6,
+                width,
+                3,
+                value=enemy.rest_timer,
+                max_value=enemy.rest_time,
+                color=pygame.Color(230, 190, 32),
+                theme=BAR_THEME,
+            )
+
+    def battle_entities(self) -> List[Any]:
+        characters = [
+            self.party.characters[key]
+            for key in sorted(self.party.characters.keys())
+        ]
+        return characters + self.enemies
+
+    def start_turns(self) -> None:
+        """Starts time-based initiative after the player chooses Fight."""
+        for entity in self.battle_entities():
+            entity.reset_rest()
+
+            if hasattr(entity, "rest_bar"):
+                entity.rest_bar.value = entity.rest_timer
+
+        self.turns_enabled = True
+        self.turn_in_progress = False
+
+    def finish_turn(self, entity: Any) -> None:
+        """Returns control to the cooldown loop after one resolved action."""
+        if entity in self.battle_entities():
+            entity.reset_rest()
+
+            if hasattr(entity, "rest_bar"):
+                entity.rest_bar.value = entity.rest_timer
+
+        self.turn_in_progress = False
+
+    def _next_ready_entity(self, dt: float) -> Optional[Any]:
+        living = [entity for entity in self.battle_entities() if not entity.dead]
+
+        # A ready combatant that waited behind another ready combatant keeps
+        # its place instead of losing its completed cooldown.
+        for entity in living:
+            if entity.ready:
+                return entity
+
+        crossed = []
+        for index, entity in enumerate(living):
+            remaining = entity.rest_time - entity.rest_timer
+            entity.update_rest(dt)
+            entity.rest_bar.value = entity.rest_timer
+
+            if entity.ready:
+                crossed.append((remaining, index, entity))
+
+        if not crossed:
+            return None
+
+        # More than one timer can cross during a long frame. The combatant
+        # needing the smallest fraction of that frame completed it first.
+        return min(crossed, key=lambda item: (item[0], item[1]))[2]
 
     def update(self, dt: float) -> None:
         if not self.battle_started:
@@ -168,6 +244,23 @@ class BattleState(BaseState):
         for enemy in self.enemies:
             if not enemy.dead:
                 enemy.update(dt)
+
+        if not self.turns_enabled or self.turn_in_progress:
+            return
+
+        entity = self._next_ready_entity(dt)
+
+        if entity is None:
+            return
+
+        from src.states.game.TakeTurnState import TakeTurnState
+
+        self.turn_in_progress = True
+        self.state_machine.push(
+            TakeTurnState(self.state_machine),
+            battle_state=self,
+            entity=entity,
+        )
 
     def _trigger_starting_dialogue(self) -> None:
         from src.states.game.BattleMenuState import BattleMenuState
@@ -220,11 +313,13 @@ class BattleState(BaseState):
             if not enemy.dead:
                 enemy.render(surface)
                 enemy.energy_bar.render(surface)
+                enemy.rest_bar.render(surface)
 
         for character in self.party.characters.values():
             if not character.dead:
                 character.render(surface)
                 character.energy_bar.render(surface)
                 character.exp_bar.render(surface)
+                character.rest_bar.render(surface)
 
         self.bottom_panel.render(surface)

@@ -77,6 +77,9 @@ def _character_attack(entity, target, strength):
 
 
 def _character_attack_aoe(entity, targets, strength):
+    if not targets:
+        return 0
+
     amount = math.floor(entity.compute_attack() * strength)
     actual_amount = math.floor(amount / len(targets))
 
@@ -93,6 +96,9 @@ def _character_heal(entity, target, strength):
 
 
 def _character_heal_aoe(entity, targets, strength):
+    if not targets:
+        return 0
+
     amount = math.floor(entity.compute_healing() * strength)
     actual_amount = math.floor(amount / len(targets))
 
@@ -109,6 +115,9 @@ def _enemy_attack(entity, target, strength=None):
 
 
 def _boss_attack_aoe(entity, targets, strength=None):
+    if not targets:
+        return 0
+
     amount = entity.compute_attack()
     actual_amount = math.floor(amount / len(targets))
 
@@ -119,6 +128,9 @@ def _boss_attack_aoe(entity, targets, strength=None):
 
 
 def _boss_heal_aoe(entity, targets, strength=None):
+    if not targets:
+        return 0
+
     amount = entity.compute_healing()
     actual_amount = math.floor(amount / len(targets))
 
@@ -157,6 +169,7 @@ ENTITY_DEFS = {
             "attackIV": 5,
             "defenseIV": 5,
             "magicIV": 0,
+            "restTime": 2.0,
             "actions": [
                 {
                     "name": "Attack",
@@ -181,6 +194,7 @@ ENTITY_DEFS = {
             "attackIV": 7,
             "defenseIV": 4,
             "magicIV": 1,
+            "restTime": 1.5,
             "actions": [
                 {
                     "name": "Attack",
@@ -213,6 +227,7 @@ ENTITY_DEFS = {
             "attackIV": 2,
             "defenseIV": 2,
             "magicIV": 7,
+            "restTime": 2.25,
             "actions": [
                 {
                     "name": "Heal",
@@ -245,6 +260,7 @@ ENTITY_DEFS = {
             "attackIV": 3,
             "defenseIV": 2,
             "magicIV": 8,
+            "restTime": 2.5,
             "actions": [
                 {
                     "name": "Flame",
@@ -285,6 +301,7 @@ ENTITY_DEFS = {
                 "baseAttack": 20,
                 "baseDefense": 5,
                 "baseMagic": 0,
+                "restTime": 2.4,
                 "animations": {
                     "default": {"frames": [4, 5, 6], "interval": 0.3},
                 },
@@ -310,6 +327,7 @@ ENTITY_DEFS = {
                 "baseAttack": 30,
                 "baseDefense": 7,
                 "baseMagic": 0,
+                "restTime": 2.2,
                 "animations": {
                     "default": {"frames": [4, 5, 6], "interval": 0.15},
                 },
@@ -335,6 +353,7 @@ ENTITY_DEFS = {
                 "baseAttack": 40,
                 "baseDefense": 15,
                 "baseMagic": 2,
+                "restTime": 1.8,
                 "animations": {
                     "default": {"frames": [4, 5, 6], "interval": 0.15},
                 },
@@ -360,6 +379,7 @@ ENTITY_DEFS = {
                 "baseAttack": 60,
                 "baseDefense": 18,
                 "baseMagic": 5,
+                "restTime": 1.6,
                 "animations": {
                     "default": {"frames": [4, 5, 6], "interval": 0.15},
                 },
@@ -385,6 +405,7 @@ ENTITY_DEFS = {
             "baseAttack": 100,
             "baseDefense": 30,
             "baseMagic": 30,
+            "restTime": 1.2,
             "animations": {
                 "default": {"frames": [4, 5, 6], "interval": 0.15},
             },

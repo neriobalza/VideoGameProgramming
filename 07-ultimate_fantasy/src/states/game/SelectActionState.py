@@ -30,7 +30,8 @@ class SelectActionState(BaseState):
         self.on_action_selected = on_action_selected
 
         items = [
-            (action["name"], self._make_selector(action)) for action in entity.actions
+            (action.get("name", "Unknown"), self._make_selector(action))
+            for action in entity.actions
         ]
         items.append(("Nothing", self._nothing))
 
@@ -44,36 +45,78 @@ class SelectActionState(BaseState):
     def _select_action(self, action: Dict[str, Any]) -> None:
         from src.states.game.SelectTargetState import SelectTargetState
 
-        if action["target_type"] == "enemy":
+        if action.get("target_type") == "enemy":
             targets: List[Any] = self.battle_state.enemies
         else:
             targets = list(self.battle_state.party.characters.values())
 
         self.state_machine.pop()
+        alive_targets = [target for target in targets if not target.dead]
 
-        if action["require_target"]:
+        if not alive_targets:
+            self._show_result("There are no valid targets for that action.")
+            return
+
+        if action.get("require_target", True):
             self.state_machine.push(
                 SelectTargetState(self.state_machine),
                 battle_state=self.battle_state,
-                targets=targets,
+                targets=alive_targets,
                 on_target_selected=lambda target: self._resolve(action, target),
             )
         else:
-            alive_targets = [target for target in targets if not target.dead]
-            amount = action["func"](self.entity, alive_targets, action.get("strength"))
-            settings.SOUNDS[action["sound_effect"]].play()
+            action_func = action.get("func")
+
+            if not callable(action_func):
+                self._show_result("That action is not available.")
+                return
+
+            try:
+                amount = action_func(
+                    self.entity, alive_targets, action.get("strength")
+                )
+            except (ArithmeticError, TypeError, ValueError):
+                self._show_result("That action could not be resolved.")
+                return
+
+            self._play_action_sound(action)
 
             for target in alive_targets:
                 Timer.tween(0.5, [(target.energy_bar, {"value": target.current_hp})])
 
-            self._show_result(f"{action['name']} for {amount} HP to each target.")
+            self._show_result(
+                f"{action.get('name', 'Action')} for {amount} HP to each target."
+            )
 
     def _resolve(self, action: Dict[str, Any], target: Any) -> None:
-        amount = action["func"](self.entity, target, action.get("strength"))
-        settings.SOUNDS[action["sound_effect"]].play()
+        if target.dead:
+            self._show_result("That target is no longer available.")
+            return
+
+        action_func = action.get("func")
+        if not callable(action_func):
+            self._show_result("That action is not available.")
+            return
+
+        try:
+            amount = action_func(self.entity, target, action.get("strength"))
+        except (ArithmeticError, TypeError, ValueError):
+            self._show_result("That action could not be resolved.")
+            return
+
+        self._play_action_sound(action)
         Timer.tween(0.5, [(target.energy_bar, {"value": target.current_hp})])
 
-        self._show_result(f"{action['name']} for {amount} HP to {target.name}.")
+        self._show_result(
+            f"{action.get('name', 'Action')} for {amount} HP to {target.name}."
+        )
+
+    @staticmethod
+    def _play_action_sound(action: Dict[str, Any]) -> None:
+        sound = settings.SOUNDS.get(action.get("sound_effect"))
+
+        if sound is not None:
+            sound.play()
 
     def _show_result(self, message: str) -> None:
         from src.states.game.BattleMessageState import BattleMessageState

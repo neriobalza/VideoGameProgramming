@@ -5,19 +5,15 @@ Study Case: Ultimate Fantasy (RPG)
 Author: Alejandro Mujica
 alejandro.j.mujic4@gmail.com
 
-This file contains the class TakeTurnState: drives one full round of
-battle -- every living party member acts (in slot order), then every
-living enemy acts (in list order, AI picking a uniformly random action
-among its own, guaranteed to hit a living target), repeating round after
-round until one side is wiped. Also handles the victory (EXP/level-up)
-and defeat (game over) end-of-battle flows.
+This file contains the class TakeTurnState: resolves the single entity
+whose rest timer completed first. Party members choose an action; enemies
+pick one at random. Once resolved, control returns to BattleState so every
+living combatant can continue charging its next turn.
 """
 
 import math
 import random
 from typing import Any
-
-import pygame
 
 from gale.state import BaseState
 from gale.timer import Timer
@@ -26,46 +22,43 @@ import settings
 
 
 class TakeTurnState(BaseState):
-    def enter(self, battle_state: Any) -> None:
+    def enter(self, battle_state: Any, entity: Any) -> None:
         self.battle_state = battle_state
-        self.enemy_attacks_in_a_row = 0
-        self._take_party_turn(0)
+        self.entity = entity
+
+        if entity.dead:
+            self._complete_turn()
+        elif any(
+            entity is character
+            for character in self.battle_state.party.characters.values()
+        ):
+            self._take_party_turn(entity)
+        else:
+            self._take_enemy_turn(entity)
 
     def _party_keys(self):
         return sorted(self.battle_state.party.characters.keys())
 
     # -- party turns ---------------------------------------------------
 
-    def _take_party_turn(self, index: int) -> None:
-        keys = self._party_keys()
-
-        if index >= len(keys):
-            self._take_enemy_turn(0)
-            return
-
-        character = self.battle_state.party.characters[keys[index]]
-
-        if character.dead:
-            self._take_party_turn(index + 1)
-            return
-
+    def _take_party_turn(self, character: Any) -> None:
         from src.states.game.BattleMessageState import BattleMessageState
 
         self.state_machine.push(
             BattleMessageState(self.state_machine),
             battle_state=self.battle_state,
             message=f"Turn for {character.name}! Select an action.",
-            on_close=lambda: self._prompt_action(character, index),
+            on_close=lambda: self._prompt_action(character),
         )
 
-    def _prompt_action(self, character: Any, index: int) -> None:
+    def _prompt_action(self, character: Any) -> None:
         from src.states.game.SelectActionState import SelectActionState
 
         def on_action_selected() -> None:
             if all(enemy.dead for enemy in self.battle_state.enemies):
                 self._victory()
             else:
-                self._take_party_turn(index + 1)
+                self._complete_turn()
 
         self.state_machine.push(
             SelectActionState(self.state_machine),
@@ -76,72 +69,82 @@ class TakeTurnState(BaseState):
 
     # -- enemy turns ----------------------------------------------------
 
-    def _take_enemy_turn(self, index: int) -> None:
-        enemies = self.battle_state.enemies
-
-        if index >= len(enemies):
-            self._take_party_turn(0)
+    def _take_enemy_turn(self, enemy: Any) -> None:
+        if not enemy.actions:
+            self._show_enemy_message(f"{enemy.name} has no available actions.")
             return
 
-        enemy = enemies[index]
-
-        if enemy.dead:
-            self._take_enemy_turn(index + 1)
-            return
-
-        self.enemy_attacks_in_a_row += 1
         action = random.choice(enemy.actions)
 
-        if action["target_type"] == "enemy":
+        if action.get("target_type") == "enemy":
             targets = list(self.battle_state.party.characters.values())
             target_label = "you"
         else:
             targets = self.battle_state.enemies
             target_label = "them"
 
-        if action["require_target"]:
-            alive = [target for target in targets if not target.dead]
-            target = random.choice(alive)
-            amount = action["func"](enemy, target, action.get("strength"))
-            settings.SOUNDS[action["sound_effect"]].play()
-            Timer.tween(0.5, [(target.energy_bar, {"value": target.current_hp})])
-            message = f"{enemy.name} used {action['name']} for {amount} HP on {target.name}."
-        else:
-            alive_targets = [target for target in targets if not target.dead]
-            amount = action["func"](enemy, alive_targets, action.get("strength"))
-            settings.SOUNDS[action["sound_effect"]].play()
+        alive_targets = [target for target in targets if not target.dead]
 
-            for target in alive_targets:
+        if not alive_targets:
+            self._show_enemy_message(f"{enemy.name} has no valid targets.")
+            return
+
+        action_func = action.get("func")
+        if not callable(action_func):
+            self._show_enemy_message(f"{enemy.name}'s action could not be used.")
+            return
+
+        try:
+            if action.get("require_target", True):
+                target = random.choice(alive_targets)
+                amount = action_func(enemy, target, action.get("strength"))
                 Timer.tween(0.5, [(target.energy_bar, {"value": target.current_hp})])
+                message = (
+                    f"{enemy.name} used {action.get('name', 'an action')} for "
+                    f"{amount} HP on {target.name}."
+                )
+            else:
+                amount = action_func(enemy, alive_targets, action.get("strength"))
 
-            message = (
-                f"{enemy.name} used {action['name']} for {amount} HP on all of "
-                f"{target_label}."
-            )
+                for target in alive_targets:
+                    Timer.tween(
+                        0.5, [(target.energy_bar, {"value": target.current_hp})]
+                    )
 
-        if all(character.dead for character in self.battle_state.party.characters.values()):
+                message = (
+                    f"{enemy.name} used {action.get('name', 'an action')} for "
+                    f"{amount} HP on all of {target_label}."
+                )
+        except (ArithmeticError, TypeError, ValueError):
+            self._show_enemy_message(f"{enemy.name}'s action could not be resolved.")
+            return
+
+        sound = settings.SOUNDS.get(action.get("sound_effect"))
+        if sound is not None:
+            sound.play()
+
+        if all(
+            character.dead
+            for character in self.battle_state.party.characters.values()
+        ):
             self._faint()
             return
 
-        from src.states.game.BattleMessageState import BattleMessageState
+        self._show_enemy_message(message)
 
-        def on_message_close() -> None:
-            if (
-                self.enemy_attacks_in_a_row < 3
-                and enemy.klass == "boss"
-                and random.randint(1, 3) == 1
-            ):
-                self._take_enemy_turn(index)
-            else:
-                self.enemy_attacks_in_a_row = 0
-                self._take_enemy_turn(index + 1)
+    def _show_enemy_message(self, message: str) -> None:
+        from src.states.game.BattleMessageState import BattleMessageState
 
         self.state_machine.push(
             BattleMessageState(self.state_machine),
             battle_state=self.battle_state,
             message=message,
-            on_close=on_message_close,
+            on_close=self._complete_turn,
         )
+
+    def _complete_turn(self) -> None:
+        self.battle_state.finish_turn(self.entity)
+        self.state_machine.pop()
 
     # -- victory / experience --------------------------------------------
 

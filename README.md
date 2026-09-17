@@ -25,6 +25,7 @@ familiar with Gale before diving into an actual game.
 | 06 | [`06-princess`](06-princess) | The Legend of the Princess (ARPG) |
 | 07 | [`07-ultimate_fantasy`](07-ultimate_fantasy) | Ultimate Fantasy (RPG) |
 | 08 | [`08-throw_a_bird`](08-throw_a_bird) | Throw a Bird |
+| 09 | [`09-underpaid`](09-underpaid) | Underpaid (Menus and display settings) |
 
 Every project follows the same layout:
 

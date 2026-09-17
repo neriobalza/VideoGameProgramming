@@ -10,7 +10,7 @@ through the (alive-only) members of a target list with left/right, and
 confirms the highlighted one with enter.
 """
 
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional, Tuple
 
 import pygame
 
@@ -25,19 +25,20 @@ class SelectTargetState(BaseState):
         battle_state: Any,
         targets: List[Any],
         on_target_selected: Callable[[Any], None],
+        cursor_position: Optional[Callable[[Any], Tuple[float, float]]] = None,
     ) -> None:
         self.battle_state = battle_state
-        self.targets = list(targets)
+        self.targets = [target for target in targets if not target.dead]
         self.on_target_selected = on_target_selected
+        self.cursor_position = cursor_position
 
         self.current_selection = 0
-        for i, target in enumerate(self.targets):
-            if not target.dead:
-                self.current_selection = i
-                break
 
     def _next_alive(self) -> None:
         n = len(self.targets)
+
+        if n == 0:
+            return
 
         for step in range(1, n + 1):
             i = (self.current_selection + step) % n
@@ -49,6 +50,9 @@ class SelectTargetState(BaseState):
     def _prev_alive(self) -> None:
         n = len(self.targets)
 
+        if n == 0:
+            return
+
         for step in range(1, n + 1):
             i = (self.current_selection - step) % n
 
@@ -57,6 +61,9 @@ class SelectTargetState(BaseState):
                 return
 
     def update(self, dt: float) -> None:
+        if self.battle_state is None:
+            return
+
         for enemy in self.battle_state.enemies:
             if not enemy.dead:
                 enemy.update(dt)
@@ -70,13 +77,24 @@ class SelectTargetState(BaseState):
         elif input_id == "move_right":
             self._next_alive()
         elif input_id == "enter":
+            if not self.targets:
+                return
+
             target = self.targets[self.current_selection]
             self.state_machine.pop()
             self.on_target_selected(target)
 
     def render(self, surface: pygame.Surface) -> None:
+        if not self.targets:
+            return
+
         target = self.targets[self.current_selection]
+        position = (
+            self.cursor_position(target)
+            if self.cursor_position is not None
+            else (target.x - settings.TILE_SIZE, target.y)
+        )
         surface.blit(
             settings.TEXTURES["cursor-right"],
-            (target.x - settings.TILE_SIZE, target.y),
+            position,
         )

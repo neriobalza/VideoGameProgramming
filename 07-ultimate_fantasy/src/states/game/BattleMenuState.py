@@ -14,8 +14,6 @@ from typing import Any
 import pygame
 
 from gale.state import BaseState
-from gale.timer import Timer
-
 import settings
 from src.gui.Menu import Menu
 
@@ -32,12 +30,8 @@ class BattleMenuState(BaseState):
         )
 
     def _fight(self) -> None:
-        from src.states.game.TakeTurnState import TakeTurnState
-
+        self.battle_state.start_turns()
         self.state_machine.pop()
-        self.state_machine.push(
-            TakeTurnState(self.state_machine), battle_state=self.battle_state
-        )
 
     def _run(self) -> None:
         from src.states.game.BattleMessageState import BattleMessageState

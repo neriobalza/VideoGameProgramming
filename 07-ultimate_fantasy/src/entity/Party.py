@@ -67,6 +67,7 @@ class Party:
                     "attackIV": char_def["attackIV"],
                     "defenseIV": char_def["defenseIV"],
                     "magicIV": char_def["magicIV"],
+                    "restTime": char_def.get("restTime", 2.0),
                     "actions": char_def["actions"],
                     "direction": "down",
                     "map_x": x,
