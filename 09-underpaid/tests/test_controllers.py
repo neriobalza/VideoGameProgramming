@@ -14,6 +14,7 @@ from gale.input_handler import InputHandler
 from src.Underpaid import Underpaid
 from src.states.game.PlayerSelectState import PlayerSelectState
 from src.states.game.PlayState import PlayState
+from src.world.Box import Box
 import settings
 
 
@@ -212,7 +213,7 @@ class ControllerTests(unittest.TestCase):
             for tile in row[1:-1]:
                 self.assertIn(tile, settings.TILE_FLOORS)
                 self.assertIsNotNone(room.tilemap.tileset_for_gid(tile))
-        self.assertTrue(pygame.Rect(0, 0, 640, 480).contains(room.bounds))
+        self.assertEqual(room.bounds, pygame.Rect(0, 0, 640, 480))
 
     def test_both_players_remain_inside_room_walls(self):
         state = self.play()
@@ -536,6 +537,264 @@ class ControllerTests(unittest.TestCase):
                 for player in state.players.values():
                     distance = (player.position - pygame.Vector2(320, 240)).length()
                     self.assertAlmostEqual(distance, settings.PLAYER_SPEED * dt, delta=0.001)
+
+    def test_boxes_block_every_direction_without_tunneling(self):
+        state = self.play()
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player = state.players[1]
+        cases = (
+            ((240, 224), (1, 0), 'right', 'left'),
+            ((400, 224), (-1, 0), 'left', 'right'),
+            ((320, 144), (0, 1), 'bottom', 'top'),
+            ((320, 320), (0, -1), 'top', 'bottom'),
+        )
+        for position, direction, player_edge, object_edge in cases:
+            with self.subTest(direction=direction):
+                player.position.update(position)
+                self.axis(71, direction[0])
+                self.axis(71, direction[1], pygame.CONTROLLER_AXIS_LEFTY)
+                self.game.update(10)
+                self.assertEqual(getattr(player.hitbox, player_edge), getattr(obj.hitbox, object_edge))
+                self.assertFalse(player.hitbox.colliderect(obj.hitbox))
+
+    def test_diagonal_movement_slides_along_box(self):
+        state = self.play()
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player = state.players[1]
+        player.position.update(288, 224)
+        self.axis(71, 1)
+        self.axis(71, 1, pygame.CONTROLLER_AXIS_LEFTY)
+        self.game.update(0.1)
+        self.assertEqual(player.position.x, 288)
+        self.assertGreater(player.position.y, 224)
+        self.assertFalse(player.hitbox.colliderect(obj.hitbox))
+
+    def test_a_lifts_adjacent_box_from_all_four_directions(self):
+        state = self.play()
+        player = state.players[1]
+        for position, facing in (((288, 224), 'right'), ((352, 224), 'left'),
+                                  ((320, 192), 'down'), ((320, 256), 'up')):
+            with self.subTest(facing=facing):
+                obj = Box(304, 224)
+                state.room.objects = [obj]
+                player.position.update(position)
+                player.facing = facing
+                self.button(71, pressed=False)
+                self.button(71)
+                self.game.update(0)
+                self.assertIs(player.carrying, obj)
+                self.assertIs(obj.carrier, player)
+                self.assertFalse(obj.solid)
+                player.clear_carrying()
+
+    def test_lifting_requires_box_in_front_and_in_reach(self):
+        state = self.play()
+        state.room.objects = [Box(304, 224)]
+        player = state.players[1]
+        for position, facing in (((288, 224), 'left'), ((240, 224), 'right')):
+            player.position.update(position)
+            player.facing = facing
+            self.button(71, pressed=False)
+            self.button(71)
+            self.game.update(0)
+            self.assertIsNone(player.carrying)
+
+    def test_enter_lifts_only_keyboard_player_and_ignores_repeat_and_release(self):
+        state = self.keyboard_play()
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        keyboard, gamepad = state.players[1], state.players[2]
+        keyboard.position.update(240, 224)
+        keyboard.facing = 'right'
+        gamepad.position.update(352, 224)
+        gamepad.facing = 'left'
+        self.key(pygame.K_RETURN, pressed=False)
+        self.game.update(0)
+        self.assertIsNone(keyboard.carrying)
+        self.key(pygame.K_RETURN)
+        self.game.update(0)  # Too far away on the first press.
+        keyboard.position.update(288, 224)
+        self.key(pygame.K_RETURN)
+        self.game.update(0)
+        self.assertIsNone(keyboard.carrying)
+        self.key(pygame.K_RETURN, pressed=False)
+        self.key_tap(pygame.K_RETURN)
+        self.game.update(0)
+        self.assertIs(keyboard.carrying, obj)
+        self.assertIsNone(gamepad.carrying)
+
+    def test_same_box_cannot_be_lifted_by_both_players(self):
+        state = self.play()
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        p1, p2 = state.players[1], state.players[2]
+        p1.position.update(288, 224)
+        p1.facing = 'right'
+        p2.position.update(352, 224)
+        p2.facing = 'left'
+        self.button(71)
+        self.button(203)
+        self.game.update(0)
+        self.assertIs(p1.carrying, obj)
+        self.assertIsNone(p2.carrying)
+        self.assertIs(obj.carrier, p1)
+
+    def test_lift_moves_box_over_head_then_follows_player(self):
+        state = self.play()
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player = state.players[1]
+        player.position.update(288, 224)
+        player.facing = 'right'
+        self.button(71)
+        self.game.update(0)
+        self.axis(71, 1)
+        self.game.update(settings.POT_LIFT_DURATION / 2)
+        self.assertEqual(player.position, pygame.Vector2(288, 224))
+        self.assertLess(obj.position.y, 224)
+        self.game.update(settings.POT_LIFT_DURATION / 2)
+        self.assertLess(obj.hitbox.bottom, player.hitbox.top)
+        old_player, old_box = player.position.copy(), obj.position.copy()
+        self.game.update(0.1)
+        self.assertGreater(player.position.x, old_player.x)
+        self.assertEqual(obj.position - old_box, player.position - old_player)
+        self.assertEqual(player.animation.current_frame_index, 0)
+        self.game.update(settings.PLAYER_FRAME_INTERVAL)
+        self.assertNotEqual(player.animation.current_frame_index, 0)
+        self.game._Game__render()
+
+    def test_carrying_uses_raised_arms_spritesheet(self):
+        state = self.play()
+        player = state.players[1]
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player.position.update(320, 192)
+        self.button(71)
+        self.game.update(0)
+        self.game.update(settings.POT_LIFT_DURATION)
+        self.axis(71, 1)
+        self.game.update(settings.PLAYER_FRAME_INTERVAL)
+        self.assertEqual(player.facing, 'right')
+        sheet = pygame.image.load(settings.BASE_DIR / 'assets' / 'graphics' / 'player_pot_walk.png')
+        expected = sheet.subsurface(pygame.Rect(32, 64, 32, 64))
+        self.assertEqual(pygame.image.tobytes(player.animation.get_current_frame(), 'RGBA'),
+                         pygame.image.tobytes(expected, 'RGBA'))
+
+    def test_player_carries_one_box_and_leaving_play_clears_it(self):
+        state = self.play()
+        first, second = Box(304, 224), Box(304, 192)
+        state.room.objects = [first, second]
+        player = state.players[1]
+        player.position.update(288, 224)
+        player.facing = 'right'
+        self.button(71)
+        self.game.update(0)
+        self.assertIs(player.carrying, first)
+        self.assertFalse(state.room.try_lift(player))
+        self.game.update(settings.POT_LIFT_DURATION)
+        self.assertIs(player.carrying, first)
+        self.assertIsNone(second.carrier)
+        self.game.state_machine.change('main_menu')
+        self.assertIsNone(player.carrying)
+        self.assertTrue(first.solid)
+
+    def test_a_places_pot_in_all_directions_at_positions_between_tiles(self):
+        state = self.play()
+        player = state.players[1]
+        for facing, expected in (('left', (279, 241)), ('right', (343, 241)),
+                                  ('up', (311, 209)), ('down', (311, 273))):
+            with self.subTest(facing=facing):
+                obj = Box(304, 224)
+                state.room.objects = [obj]
+                player.position.update(288, 224)
+                player.lift(obj)
+                self.game.update(settings.POT_LIFT_DURATION)
+                player.position.update(327, 241)
+                player.facing = facing
+                self.button(71, pressed=False)
+                self.button(71)
+                self.game.update(0)
+                self.assertIsNone(player.carrying)
+                self.assertIsNone(obj.carrier)
+                self.assertTrue(obj.solid)
+                self.assertEqual(obj.position, pygame.Vector2(expected))
+                self.assertEqual(obj.floor_position, obj.position)
+                self.assertTrue(state.room.walkable_area.contains(obj.hitbox))
+                self.assertIs(player.animation, player.animations[facing])
+
+    def test_enter_places_pot_and_repeat_does_not_lift_it_again(self):
+        state = self.keyboard_play()
+        player = state.players[1]
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player.position.update(288, 224)
+        player.facing = 'right'
+        self.key_tap(pygame.K_RETURN)
+        self.game.update(0)
+        self.game.update(settings.POT_LIFT_DURATION)
+        player.position.update(327, 241)
+        self.key(pygame.K_RETURN)
+        self.game.update(0)
+        self.assertIsNone(player.carrying)
+        self.assertEqual(obj.position, pygame.Vector2(343, 241))
+        self.key(pygame.K_RETURN)
+        self.game.update(0)
+        self.assertIsNone(player.carrying)
+        self.key(pygame.K_RETURN, pressed=False)
+        self.key_tap(pygame.K_RETURN)
+        self.game.update(0)
+        self.assertIs(player.carrying, obj)
+
+    def test_pot_cannot_be_placed_on_wall_other_pot_or_player(self):
+        state = self.play()
+        player, other = state.players[1], state.players[2]
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player.lift(obj)
+        self.game.update(settings.POT_LIFT_DURATION)
+        player.position.update(320, state.room.walkable_area.top)
+        player.facing = 'up'
+        self.button(71)
+        self.game.update(0)
+        self.assertIs(player.carrying, obj)
+        player.position.update(327, 241)
+        player.facing = 'right'
+        state.room.objects.append(Box(343, 241))
+        self.button(71, pressed=False)
+        self.button(71)
+        self.game.update(0)
+        self.assertIs(player.carrying, obj)
+        state.room.objects.pop()
+        other.position.update(359, 241)
+        self.button(71, pressed=False)
+        self.button(71)
+        self.game.update(0)
+        self.assertIs(player.carrying, obj)
+        self.assertFalse(obj.solid)
+
+    def test_placed_pot_blocks_movement_and_other_player_can_lift_it(self):
+        state = self.play()
+        player, other = state.players[1], state.players[2]
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player.lift(obj)
+        self.game.update(settings.POT_LIFT_DURATION)
+        player.position.update(327, 241)
+        player.facing = 'right'
+        self.button(71)
+        self.game.update(0)
+        self.axis(71, 1)
+        self.game.update(0.1)
+        self.assertEqual(player.position.x, 327)
+        other.position.update(391, 241)
+        other.facing = 'left'
+        self.button(203)
+        self.game.update(0)
+        self.assertIs(other.carrying, obj)
+        self.assertIsNone(player.carrying)
+        self.assertIs(obj.carrier, other)
 
     def test_keyboard_diagonals_and_opposing_keys(self):
         keyboard = self.keyboard_play().players[1]

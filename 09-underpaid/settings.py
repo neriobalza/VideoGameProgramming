@@ -54,8 +54,8 @@ BASE_DIR = Path(__file__).resolve().parent
 TILE_SIZE = 16
 TILE_SCALE = 2
 TILE_RENDER_SIZE = TILE_SIZE * TILE_SCALE
-MAP_WIDTH = VIRTUAL_WIDTH // TILE_RENDER_SIZE - 2
-MAP_HEIGHT = VIRTUAL_HEIGHT // TILE_RENDER_SIZE - 3
+MAP_WIDTH = VIRTUAL_WIDTH // TILE_RENDER_SIZE
+MAP_HEIGHT = VIRTUAL_HEIGHT // TILE_RENDER_SIZE
 MAP_RENDER_OFFSET_X = (VIRTUAL_WIDTH - MAP_WIDTH * TILE_RENDER_SIZE) // 2
 MAP_RENDER_OFFSET_Y = (VIRTUAL_HEIGHT - MAP_HEIGHT * TILE_RENDER_SIZE) // 2
 
@@ -74,6 +74,8 @@ TILE_TOP_WALLS = (58, 59, 60)
 TILE_BOTTOM_WALLS = (79, 80, 81)
 TILE_LEFT_WALLS = (77, 96, 115)
 TILE_RIGHT_WALLS = (78, 97, 116)
+POT_TILE = 16
+POT_LIFT_DURATION = 0.3
 
 
 @lru_cache(maxsize=1)
@@ -83,10 +85,10 @@ def load_room_tileset() -> Tileset:
     return Tileset(sheet, TILE_RENDER_SIZE, TILE_RENDER_SIZE)
 
 
-@lru_cache(maxsize=1)
-def load_player_frames() -> dict[str, tuple[pygame.Surface, ...]]:
+@lru_cache(maxsize=2)
+def load_player_frames(filename: str = "player_walk.png") -> dict[str, tuple[pygame.Surface, ...]]:
     """Carga una vez el spritesheet; cada jugador conserva su propio reloj."""
-    sheet = pygame.image.load(BASE_DIR / "assets" / "graphics" / "player_walk.png").convert_alpha()
+    sheet = pygame.image.load(BASE_DIR / "assets" / "graphics" / filename).convert_alpha()
     return {
         direction: tuple(
             sheet.subsurface(pygame.Rect(

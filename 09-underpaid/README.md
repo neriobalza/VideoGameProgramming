@@ -74,6 +74,7 @@ un jugador: pulsa A o Enter de nuevo para entrar en el centro.
 | Recorrer izquierda, centro y derecha | Joystick izquierdo | Flechas izquierda/derecha |
 | Cancelar confirmación | B | Delete (también Backspace) |
 | Mover el personaje en la partida | Joystick izquierdo | W/A/S/D |
+| Levantar / colocar una vasija en la partida | A | Enter |
 
 1. Pulsa **A en el mando o Enter en el teclado** para aparecer en el centro.
 2. Usa el joystick izquierdo o las flechas para recorrer **Player 1 ↔ centro ↔ Player 2**.
@@ -110,12 +111,34 @@ tiles de suelo, paredes y esquinas. El tilesheet se incluye como una copia
 local en `assets/graphics/tilesheet.png`, por lo que Underpaid puede ejecutarse
 sin depender de la carpeta del otro proyecto.
 
-`src/world/Room.py` construye la sala de 18 × 12 tiles. Los tiles originales
+`src/world/Room.py` construye la sala de 20 × 15 tiles, que ocupa toda la pantalla
+virtual de 640 × 480, sin textos superpuestos durante la partida. Los tiles originales
 de 16 × 16 píxeles se dibujan a 32 × 32 para mantener la escala de los personajes.
 Ambos jugadores aparecen dentro de la sala y las paredes delimitan su movimiento.
 La colisión utiliza la mitad inferior del personaje, donde apoya los pies, para
 alcanzar todos los tiles de suelo junto a las paredes. La cabeza y el torso pueden
 superponerse a la pared superior, dando perspectiva sin atravesar los límites del suelo.
+
+## Objetos levantables
+
+La sala contiene cuatro objetos sólidos (`src/world/Box.py`) que usan la misma
+vasija de `06-princess`: el tile 16 del tilesheet, dibujado a 32 × 32 píxeles.
+Su colisión se calcula contra la mitad inferior de los personajes. Los jugadores
+pueden deslizarse junto a los objetos sin atravesarlos.
+
+Acércate a una vasija, mira hacia ella y pulsa **A en el mando o Enter en el teclado**
+para levantarla. Durante los 0,3 segundos del levantamiento el personaje permanece
+quieto; después puede caminar llevando el objeto sobre la cabeza. La vasija levantada
+deja de bloquear el suelo y sólo puede pertenecer a un jugador. Cada personaje puede
+cargar un objeto a la vez.
+Al cargar, el personaje utiliza `assets/graphics/player_pot_walk.png` para caminar
+con los brazos levantados. Cada jugador mantiene su propia animación de carga.
+
+Mientras cargas una vasija, pulsa **A o Enter de nuevo** para colocarla en el suelo
+delante del personaje. Puedes dejarla en cualquier posición libre, sin ajustarla
+a la cuadrícula. Si hay una pared, otra vasija o un jugador en ese lugar, conservas
+la vasija sobre la cabeza hasta encontrar espacio. Al colocarla vuelve a bloquear
+el paso y cualquiera de los dos jugadores puede levantarla de nuevo.
 
 ## Verificación
 
