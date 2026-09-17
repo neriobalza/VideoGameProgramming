@@ -703,11 +703,11 @@ class ControllerTests(unittest.TestCase):
         self.assertIsNone(player.carrying)
         self.assertTrue(first.solid)
 
-    def test_a_places_pot_in_all_directions_at_positions_between_tiles(self):
+    def test_a_places_pot_on_grid_in_all_directions_from_between_tiles(self):
         state = self.play()
         player = state.players[1]
-        for facing, expected in (('left', (279, 241)), ('right', (343, 241)),
-                                  ('up', (311, 209)), ('down', (311, 273))):
+        for facing, expected in (('left', (256, 256)), ('right', (352, 256)),
+                                  ('up', (320, 192)), ('down', (320, 288))):
             with self.subTest(facing=facing):
                 obj = Box(304, 224)
                 state.room.objects = [obj]
@@ -727,6 +727,81 @@ class ControllerTests(unittest.TestCase):
                 self.assertTrue(state.room.walkable_area.contains(obj.hitbox))
                 self.assertIs(player.animation, player.animations[facing])
 
+    def test_placement_preview_only_marks_facing_cell_while_carrying(self):
+        state = self.play()
+        player = state.players[1]
+        surface = pygame.Surface((640, 480), pygame.SRCALPHA)
+        state.room.render_placement(surface, state.players.values())
+        self.assertEqual(pygame.mask.from_surface(surface).count(), 0)
+        obj = state.room.objects[0]
+        player.lift(obj)
+        self.game.update(settings.POT_LIFT_DURATION)
+        player.position.update(327, 241)
+        for facing, expected in (('left', (256, 256)), ('right', (352, 256)),
+                                  ('up', (320, 192)), ('down', (320, 288))):
+            with self.subTest(facing=facing):
+                surface.fill((0, 0, 0, 0))
+                player.facing = facing
+                state.room.render_placement(surface, state.players.values())
+                self.assertEqual(surface.get_bounding_rect(), pygame.Rect(*expected, 32, 32))
+                self.assertEqual(surface.get_at(expected)[:3], settings.PLACEMENT_VALID_COLOR)
+        self.assertTrue(state.room.try_put_down(player, state.players.values()))
+        surface.fill((0, 0, 0, 0))
+        state.room.render_placement(surface, state.players.values())
+        self.assertEqual(pygame.mask.from_surface(surface).count(), 0)
+
+    def test_red_placement_preview_and_put_down_use_same_collision_rules(self):
+        state = self.play()
+        player, other = state.players[1], state.players[2]
+        obj = Box(304, 224)
+        state.room.objects = [obj]
+        player.position.update(327, 241)
+        player.facing = 'right'
+        player.lift(obj)
+        surface = pygame.Surface((640, 480), pygame.SRCALPHA)
+        for blocker in ('lifting', 'wall', 'pot', 'player'):
+            with self.subTest(blocker=blocker):
+                player.position.update(327, 241)
+                player.facing = 'right'
+                other.position.update(464, 256)
+                state.room.objects = [obj]
+                player.lift_elapsed = settings.POT_LIFT_DURATION
+                if blocker == 'lifting':
+                    player.lift_elapsed = 0
+                elif blocker == 'wall':
+                    player.position.y = state.room.walkable_area.top
+                    player.facing = 'up'
+                elif blocker == 'pot':
+                    state.room.objects.append(Box(352, 256))
+                else:
+                    other.position.update(368, 256)
+                target = state.room.placement_target(player)
+                surface.fill((0, 0, 0, 0))
+                state.room.render_placement(surface, state.players.values())
+                self.assertEqual(surface.get_at(target.topleft)[:3], settings.PLACEMENT_INVALID_COLOR)
+                if blocker == 'wall':
+                    self.game._Game__render()
+                    self.assertEqual(self.game.render_surface.get_at((target.centerx, target.top))[:3],
+                                     settings.PLACEMENT_INVALID_COLOR)
+                self.assertFalse(state.room.try_put_down(player, state.players.values()))
+                self.assertIs(player.carrying, obj)
+
+    def test_each_carrying_player_gets_their_own_directional_preview(self):
+        state = self.play()
+        first, second = state.players.values()
+        first.position.update(176, 160)
+        second.position.update(464, 288)
+        first.facing, second.facing = 'right', 'up'
+        first.lift(state.room.objects[0])
+        second.lift(state.room.objects[-1])
+        self.game.update(settings.POT_LIFT_DURATION)
+        surface = pygame.Surface((640, 480), pygame.SRCALPHA)
+        state.room.render_placement(surface, state.players.values())
+        self.assertEqual(pygame.mask.from_surface(surface).count(), 2 * (32 * 32 - 28 * 28))
+        for player in (first, second):
+            target = state.room.placement_target(player)
+            self.assertEqual(surface.get_at(target.topleft)[:3], settings.PLACEMENT_VALID_COLOR)
+
     def test_enter_places_pot_and_repeat_does_not_lift_it_again(self):
         state = self.keyboard_play()
         player = state.players[1]
@@ -741,7 +816,7 @@ class ControllerTests(unittest.TestCase):
         self.key(pygame.K_RETURN)
         self.game.update(0)
         self.assertIsNone(player.carrying)
-        self.assertEqual(obj.position, pygame.Vector2(343, 241))
+        self.assertEqual(obj.position, pygame.Vector2(352, 256))
         self.key(pygame.K_RETURN)
         self.game.update(0)
         self.assertIsNone(player.carrying)
@@ -790,7 +865,7 @@ class ControllerTests(unittest.TestCase):
         self.game.update(0)
         self.axis(71, 1)
         self.game.update(0.1)
-        self.assertEqual(player.position.x, 327)
+        self.assertEqual(player.position.x, 336)
         other.position.update(391, 241)
         other.facing = 'left'
         self.button(203)

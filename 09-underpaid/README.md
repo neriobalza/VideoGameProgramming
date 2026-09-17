@@ -149,8 +149,10 @@ Al cargar, el personaje utiliza `assets/graphics/player_pot_walk.png` para camin
 con los brazos levantados. Cada jugador mantiene su propia animación de carga.
 
 Mientras cargas una vasija, pulsa **A o Enter de nuevo** para colocarla en el suelo
-delante del personaje. Puedes dejarla en cualquier posición libre, sin ajustarla
-a la cuadrícula. Si hay una pared, otra vasija o un jugador en ese lugar, conservas
+delante del personaje, alineada a la cuadrícula de tiles de 32 × 32 píxeles.
+Sólo se muestra la casilla en la dirección que miras mientras cargas: verde si
+puedes colocar la vasija y roja si está bloqueada o todavía estás levantándola.
+Si hay una pared, otra vasija o un jugador en ese lugar, conservas
 la vasija sobre la cabeza hasta encontrar espacio. Al colocarla vuelve a bloquear
 el paso y cualquiera de los dos jugadores puede levantarla de nuevo.
 

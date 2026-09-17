@@ -1,5 +1,6 @@
 """Sala de suelo y paredes basada en el mapa de 06-princess."""
 
+import math
 import random
 
 import pygame
@@ -92,25 +93,51 @@ class Room:
             return self.try_lift(player)
         return self.try_put_down(player, players)
 
-    def try_put_down(self, player, players) -> bool:
-        """Coloca la vasija delante del jugador en cualquier posición libre."""
-        obj = player.carrying
-        if obj is None or player.lift_elapsed < settings.POT_LIFT_DURATION:
-            return False
+    def placement_target(self, player) -> pygame.Rect:
+        """Casilla de la cuadrícula más próxima frente a los pies."""
         feet = player.hitbox
-        positions = {
-            "left": (feet.left - obj.width, feet.centery - obj.height / 2),
-            "right": (feet.right, feet.centery - obj.height / 2),
-            "up": (feet.centerx - obj.width / 2, feet.top - obj.height),
-            "down": (feet.centerx - obj.width / 2, feet.bottom),
-        }
-        x, y = positions[player.facing]
-        target = pygame.Rect(round(x), round(y), obj.width, obj.height)
+        size = settings.TILE_RENDER_SIZE
+        col = (feet.centerx - self.bounds.left) // size
+        row = (feet.centery - self.bounds.top) // size
+        if player.facing == "left":
+            col = (feet.left - size - self.bounds.left) // size
+        elif player.facing == "right":
+            col = math.ceil((feet.right - self.bounds.left) / size)
+        elif player.facing == "up":
+            row = (feet.top - size - self.bounds.top) // size
+        else:
+            row = math.ceil((feet.bottom - self.bounds.top) / size)
+        return pygame.Rect(self.bounds.left + col * size,
+                           self.bounds.top + row * size, size, size)
+
+    def can_place(self, player, target, players) -> bool:
+        if player.carrying is None or player.lift_elapsed < settings.POT_LIFT_DURATION:
+            return False
         if not self.walkable_area.contains(target):
             return False
         if any(other.solid and target.colliderect(other.hitbox) for other in self.objects):
             return False
         if any(target.colliderect(other.hitbox) for other in players):
+            return False
+        return True
+
+    def render_placement(self, surface, players) -> None:
+        players = tuple(players)
+        for player in players:
+            if player.carrying is None:
+                continue
+            target = self.placement_target(player)
+            color = (settings.PLACEMENT_VALID_COLOR if self.can_place(player, target, players)
+                     else settings.PLACEMENT_INVALID_COLOR)
+            overlay = pygame.Surface(target.size, pygame.SRCALPHA)
+            overlay.fill((*color, 90))
+            pygame.draw.rect(overlay, color, overlay.get_rect(), 2)
+            surface.blit(overlay, target)
+
+    def try_put_down(self, player, players) -> bool:
+        """Coloca la vasija en la misma casilla que marca la vista previa."""
+        target = self.placement_target(player)
+        if not self.can_place(player, target, players):
             return False
         player.put_down(target.topleft)
         return True

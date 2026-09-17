@@ -81,6 +81,7 @@ class PlayState(BaseState):
         entities = list(self.players.values()) + [obj for obj in self.room.objects if obj.solid]
         for entity in sorted(entities, key=lambda entity: entity.hitbox.bottom):
             entity.render(surface)
+        self.room.render_placement(surface, self.players.values())
         pygame.draw.rect(surface, settings.CLOCK_BAR_COLOR,
                          (0, 0, settings.VIRTUAL_WIDTH, settings.CLOCK_BAR_HEIGHT))
         draw_text(surface, self.clock_text, self.game.fonts["medium"],
