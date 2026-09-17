@@ -1,4 +1,4 @@
-"""Personaje vinculado exclusivamente al ID de instancia de un mando."""
+"""Personaje vinculado exclusivamente a un mando o al teclado."""
 
 import pygame
 
@@ -6,11 +6,23 @@ import settings
 
 
 class Player:
-    def __init__(self, controller_id: int) -> None:
-        self.controller_id = controller_id
+    def __init__(self, input_source: int | str) -> None:
+        self.input_source = input_source
         self.number: int | None = None
         self.position = pygame.Vector2(settings.VIRTUAL_WIDTH / 2, 260)
         self.direction = pygame.Vector2()
+        self.keyboard_keys: set[int] = set()
+
+    @property
+    def uses_keyboard(self) -> bool:
+        return self.input_source == settings.KEYBOARD_INPUT
+
+    @property
+    def controller_id(self) -> int | None:
+        return None if self.uses_keyboard else self.input_source
+
+    def is_connected(self, controllers) -> bool:
+        return self.uses_keyboard or controllers.is_connected(self.controller_id)
 
     def select(self, number: int) -> None:
         if self.number is not None:
@@ -23,13 +35,31 @@ class Player:
 
     def stop(self) -> None:
         self.direction.update(0, 0)
+        self.keyboard_keys.clear()
 
     def unselect(self) -> None:
         self.number = None
         self.stop()
 
     def on_input(self, input_id, input_data) -> None:
-        if self.number is None or getattr(input_data, "gamepad_id", None) != self.controller_id:
+        if self.number is None:
+            return
+        if self.uses_keyboard:
+            if not input_id.startswith("keyboard_") or not hasattr(input_data, "key"):
+                return
+            key = input_data.key
+            if key not in (pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d):
+                return
+            if input_data.pressed:
+                self.keyboard_keys.add(key)
+            else:
+                self.keyboard_keys.discard(key)
+            self.direction.update(
+                int(pygame.K_d in self.keyboard_keys) - int(pygame.K_a in self.keyboard_keys),
+                int(pygame.K_s in self.keyboard_keys) - int(pygame.K_w in self.keyboard_keys),
+            )
+            return
+        if getattr(input_data, "gamepad_id", None) != self.controller_id:
             return
         if input_id not in ("pad_x", "pad_y"):
             return

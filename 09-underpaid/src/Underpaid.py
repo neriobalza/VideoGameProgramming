@@ -86,6 +86,14 @@ class Underpaid(Game):
         self.state_machine.render(surface)
 
     def on_input(self, input_id: str, input_data: InputData) -> None:
+        if input_id == "cancel" and isinstance(
+            self.state_machine.current, (MainMenuState, SettingsState)
+        ):
+            input_id = "back"
+        if input_id.startswith("keyboard_") and isinstance(
+            self.state_machine.current, (MainMenuState, SettingsState)
+        ):
+            input_id = input_id.removeprefix("keyboard_")
         if input_id.startswith("pad_"):
             self.controllers.refresh()
             if not self.controllers.is_connected(input_data.gamepad_id):

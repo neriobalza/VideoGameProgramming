@@ -1,7 +1,7 @@
 # Underpaid
 
 Base de videojuego con Gale y Pygame: menú principal, configuración de
-pantalla, selección de dos jugadores con mandos y movimiento independiente.
+pantalla, selección de dos jugadores con mandos o mando y teclado, y movimiento independiente.
 Usa las dependencias compartidas del repositorio y la fuente incluida en Pygame.
 
 ## Ejecutar
@@ -56,35 +56,47 @@ Puedes iniciar en pantalla completa configurando `FULLSCREEN = True` en `setting
 - `src/states/game/SettingsState.py`: configuración de resolución.
 - `src/states/game/PlayerSelectState.py`: entrada con A y elección exclusiva de lado.
 - `src/states/game/PlayState.py`: movimiento independiente de los dos jugadores.
-- `src/entity/Player.py`: personaje y vínculo con el ID de su mando.
+- `src/entity/Player.py`: personaje y vínculo exclusivo con su mando o teclado.
 - `src/input/ControllerManager.py`: inicialización de mandos y detección de conexiones.
 
-## Dos jugadores con mandos
+## Dos jugadores
 
 Conecta dos mandos Xbox (u otros mandos reconocidos por el mapeo de SDL).
-El menú principal se puede manejar con cruceta y A; **Jugar** abre la selección.
-El A utilizado para abrir esa pantalla no registra un jugador: pulsa A de nuevo.
+También puedes utilizar **un mando y el teclado**; cada método de entrada puede
+elegir Player 1 o Player 2. Se admiten dos participantes, cada uno con una entrada diferente.
+El menú principal se puede manejar con cruceta y A, o con flechas y Enter;
+**Jugar** abre la selección. La pulsación que abre esa pantalla no registra
+un jugador: pulsa A o Enter de nuevo para entrar en el centro.
 
-1. Pulsa **A en cada mando** para que aparezca su personaje en el centro.
-2. Inclina el joystick izquierdo para recorrer **Player 1 ↔ centro ↔ Player 2**.
-   Suelta el joystick entre pasos. Puedes cambiar de lado mientras exploras.
-3. Pulsa **A de nuevo** sobre un personaje para confirmarlo. Desde el centro
+| Acción | Mando | Teclado |
+|--------|-------|---------|
+| Entrar en selección / confirmar | A | Enter |
+| Recorrer izquierda, centro y derecha | Joystick izquierdo | Flechas izquierda/derecha |
+| Cancelar confirmación | B | Delete (también Backspace) |
+| Mover el cuadrado en la partida | Joystick izquierdo | W/A/S/D |
+
+1. Pulsa **A en el mando o Enter en el teclado** para aparecer en el centro.
+2. Usa el joystick izquierdo o las flechas para recorrer **Player 1 ↔ centro ↔ Player 2**.
+   Suelta el joystick o la tecla entre pasos. Puedes cambiar de lado mientras exploras.
+3. Pulsa **A o Enter de nuevo** sobre un personaje para confirmarlo. Desde el centro
    no se confirma ningún personaje. Sólo la confirmación reserva el lado.
-4. Pulsa **B** para cancelar tu confirmación, liberar el personaje y seguir
-   escogiendo. Un personaje confirmado por otro mando no puede seleccionarse.
-5. Cuando ambos mandos confirmen personajes diferentes, se abre la pantalla
+4. Pulsa **B o Delete** para cancelar tu confirmación, liberar el personaje y seguir
+   escogiendo. Un personaje confirmado por el otro jugador no puede seleccionarse.
+5. Cuando ambos jugadores confirmen personajes diferentes, se abre la pantalla
    de juego con **dos cuadrados**.
 
-Cada cuadrado se mueve en todas las direcciones sólo con el joystick izquierdo
-del mando que confirmó ese personaje, dentro de los límites de la pantalla.
+Cada cuadrado se mueve en todas las direcciones únicamente con el método de entrada
+que confirmó ese personaje, dentro de los límites de la pantalla. En el teclado,
+**W** mueve arriba, **A** a la izquierda, **S** abajo y **D** a la derecha;
+las flechas se utilizan para la selección y los menús.
 Hay una zona muerta para evitar movimiento por pequeñas desviaciones del joystick.
-Al desconectar un mando se vuelve a selección, conservando el jugador conectado y
+Al desconectar un mando se vuelve a selección, conservando el jugador conectado (o el teclado) y
 dejando libre el lado del desconectado. Un mando reconectado debe pulsar A y elegir
 el lado libre y confirmarlo con A.
 
 ## Verificación
 
-Las pruebas utilizan eventos SDL y mandos simulados. Desde `09-underpaid`,
+Las pruebas utilizan eventos de teclado y eventos SDL con mandos simulados. Desde `09-underpaid`,
 con el entorno virtual activado:
 
 ```bash

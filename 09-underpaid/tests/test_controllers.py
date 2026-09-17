@@ -56,6 +56,28 @@ class ControllerTests(unittest.TestCase):
             axis=axis, value=round(value * 32767),
         ))
 
+    def key(self, key, pressed=True):
+        InputHandler.handle_input(pygame.event.Event(
+            pygame.KEYDOWN if pressed else pygame.KEYUP,
+            key=key, mod=0, unicode='',
+        ))
+
+    def key_tap(self, key):
+        self.key(key)
+        self.key(key, pressed=False)
+
+    def keyboard_play(self, number=1):
+        self.devices = self.devices[:1]
+        self.selection()
+        self.key_tap(pygame.K_RETURN)
+        self.key_tap(pygame.K_LEFT if number == 1 else pygame.K_RIGHT)
+        self.key_tap(pygame.K_RETURN)
+        self.button(71)
+        self.move_choice(71, 1 if number == 1 else -1)
+        self.button(71)
+        self.assertIsInstance(self.game.state_machine.current, PlayState)
+        return self.game.state_machine.current
+
     def selection(self):
         self.button(71)
         self.assertIsInstance(self.game.state_machine.current, PlayerSelectState)
@@ -300,6 +322,133 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(surface.get_at((144, 224))[:3], settings.PLAYER_COLORS[1])
         self.assertEqual(surface.get_at((175, 255))[:3], settings.PLAYER_COLORS[1])
         self.assertEqual(surface.get_at((176, 256))[:3], settings.BACKGROUND_COLOR)
+
+    def test_enter_registers_keyboard_once_and_space_does_not_register(self):
+        self.devices.clear()
+        self.key_tap(pygame.K_RETURN)  # Open selection from main menu.
+        state = self.game.state_machine.current
+        self.assertIsInstance(state, PlayerSelectState)
+        self.assertEqual(state.participants, {})
+        self.key_tap(pygame.K_SPACE)
+        self.key(pygame.K_RETURN, pressed=False)
+        self.assertEqual(state.participants, {})
+        self.key(pygame.K_RETURN)
+        self.key(pygame.K_RETURN)  # Simulate repeated keydown while held.
+        self.assertEqual(set(state.participants), {settings.KEYBOARD_INPUT})
+        self.assertTrue(state.participants[settings.KEYBOARD_INPUT].uses_keyboard)
+        self.assertEqual(state.players, {})
+
+    def test_keyboard_arrows_browse_center_and_wasd_do_not_choose(self):
+        state = self.selection()
+        self.key_tap(pygame.K_RETURN)
+        source = settings.KEYBOARD_INPUT
+        self.key_tap(pygame.K_a)
+        self.assertIsNone(state.choices[source])
+        self.key_tap(pygame.K_LEFT)
+        self.assertEqual(state.choices[source], 1)
+        self.key(pygame.K_RIGHT)
+        self.key(pygame.K_RIGHT)
+        self.assertIsNone(state.choices[source])
+        self.key(pygame.K_RIGHT, pressed=False)
+        self.key_tap(pygame.K_RIGHT)
+        self.assertEqual(state.choices[source], 2)
+        self.assertEqual(state.players, {})
+
+    def test_delete_cancels_only_keyboard_confirmation_and_frees_side(self):
+        state = self.selection()
+        self.key_tap(pygame.K_RETURN)
+        self.key_tap(pygame.K_LEFT)
+        self.key_tap(pygame.K_RETURN)
+        self.button(71)
+        self.move_choice(71, -1)
+        self.assertIsNone(state.choices[71])
+        self.button(71, pygame.CONTROLLER_BUTTON_B)
+        self.assertIn(1, state.players)
+        self.key(pygame.K_DELETE, pressed=False)
+        self.assertIn(1, state.players)
+        self.key_tap(pygame.K_DELETE)
+        self.assertEqual(state.players, {})
+        self.assertIsNone(state.participants[settings.KEYBOARD_INPUT].number)
+        self.move_choice(71, -1)
+        self.button(71)
+        self.assertEqual(state.players[1].controller_id, 71)
+        self.key_tap(pygame.K_RIGHT)
+        self.key_tap(pygame.K_RIGHT)
+        self.key_tap(pygame.K_RETURN)
+        self.assertIsInstance(self.game.state_machine.current, PlayState)
+        self.assertTrue(self.game.state_machine.current.players[2].uses_keyboard)
+
+    def test_one_controller_and_keyboard_can_choose_either_character(self):
+        for number in (1, 2):
+            state = self.keyboard_play(number)
+            self.assertTrue(state.players[number].uses_keyboard)
+            self.assertEqual(state.players[3 - number].controller_id, 71)
+            self.game.state_machine.change('main_menu')
+
+    def test_wasd_moves_only_keyboard_player_and_release_stops_movement(self):
+        state = self.keyboard_play()
+        keyboard, gamepad = state.players[1], state.players[2]
+        gamepad_position = gamepad.position.copy()
+        for key, dx, dy in ((pygame.K_w, 0, -1), (pygame.K_a, -1, 0),
+                            (pygame.K_s, 0, 1), (pygame.K_d, 1, 0)):
+            position = keyboard.position.copy()
+            self.key(key)
+            self.game.update(0.1)
+            self.assertEqual(keyboard.position - position, pygame.Vector2(dx, dy) * 18)
+            self.assertEqual(gamepad.position, gamepad_position)
+            self.key(key, pressed=False)
+            position = keyboard.position.copy()
+            self.game.update(0.1)
+            self.assertEqual(keyboard.position, position)
+        self.key_tap(pygame.K_RIGHT)
+        self.game.update(0.1)
+        self.assertEqual(keyboard.position, position)
+        self.axis(71, 1)
+        self.game.update(0.1)
+        self.assertEqual(keyboard.position, position)
+        self.assertGreater(gamepad.position.x, gamepad_position.x)
+
+    def test_keyboard_diagonals_and_opposing_keys(self):
+        keyboard = self.keyboard_play().players[1]
+        position = keyboard.position.copy()
+        self.key(pygame.K_w)
+        self.key(pygame.K_d)
+        self.game.update(0.1)
+        movement = keyboard.position - position
+        self.assertLess(movement.y, 0)
+        self.assertGreater(movement.x, 0)
+        self.assertAlmostEqual(movement.length(), 18)
+        self.key(pygame.K_a)
+        self.assertEqual(keyboard.direction.x, 0)
+        self.key(pygame.K_s)
+        self.assertEqual(keyboard.direction, pygame.Vector2())
+        self.key(pygame.K_d, pressed=False)
+        self.assertEqual(keyboard.direction.x, -1)
+        self.key(pygame.K_w, pressed=False)
+        self.assertEqual(keyboard.direction.y, 1)
+
+    def test_gamepad_disconnect_preserves_keyboard_player(self):
+        state = self.keyboard_play()
+        keyboard = state.players[1]
+        self.key(pygame.K_w)
+        self.devices.clear()
+        self.game.update(0.1)
+        state = self.game.state_machine.current
+        self.assertIsInstance(state, PlayerSelectState)
+        self.assertEqual(state.players, {1: keyboard})
+        self.assertEqual(keyboard.direction, pygame.Vector2())
+        self.game.update(0.1)
+        self.assertIn(settings.KEYBOARD_INPUT, state.participants)
+        self.key_tap(pygame.K_DELETE)
+        self.assertEqual(state.players, {})
+
+    def test_keyboard_cannot_join_when_two_controllers_are_participating(self):
+        state = self.selection()
+        self.button(71)
+        self.button(203)
+        self.key_tap(pygame.K_RETURN)
+        self.assertEqual(set(state.participants), {71, 203})
+        self.assertNotIn(settings.KEYBOARD_INPUT, state.choices)
 
 
 if __name__ == "__main__":

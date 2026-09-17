@@ -38,6 +38,7 @@ PLAYER_SPEED = 180
 PLAYER_SIZE = 32
 STICK_DEADZONE = 0.2
 SELECTION_THRESHOLD = 0.6
+KEYBOARD_INPUT = "keyboard"
 
 
 def create_fonts() -> dict[str, pygame.font.Font]:
@@ -51,16 +52,18 @@ def create_fonts() -> dict[str, pygame.font.Font]:
 
 for key, action in (
     (pygame.K_UP, "up"),
-    (pygame.K_w, "up"),
+    (pygame.K_w, "keyboard_up"),
     (pygame.K_DOWN, "down"),
-    (pygame.K_s, "down"),
+    (pygame.K_s, "keyboard_down"),
     (pygame.K_LEFT, "left"),
-    (pygame.K_a, "left"),
+    (pygame.K_a, "keyboard_left"),
     (pygame.K_RIGHT, "right"),
-    (pygame.K_d, "right"),
+    (pygame.K_d, "keyboard_right"),
     (pygame.K_RETURN, "confirm"),
     (pygame.K_SPACE, "confirm"),
     (pygame.K_ESCAPE, "back"),
+    (pygame.K_DELETE, "cancel"),
+    (pygame.K_BACKSPACE, "cancel"),
 ):
     InputHandler.set_keyboard_action(key, action)
 

@@ -1,4 +1,4 @@
-"""Pantalla de los dos personajes, cada uno movido sólo por su mando."""
+"""Dos cuadrados, cada uno controlado por su método de entrada asignado."""
 
 from gale.state import BaseState
 
@@ -21,7 +21,7 @@ class PlayState(BaseState):
     def update(self, dt: float) -> None:
         connected = {
             number: player for number, player in self.players.items()
-            if self.game.controllers.is_connected(player.controller_id)
+            if player.is_connected(self.game.controllers)
         }
         if len(connected) != 2:
             self.state_machine.change("player_select", players=connected)
@@ -40,7 +40,7 @@ class PlayState(BaseState):
         surface.fill(settings.BACKGROUND_COLOR)
         draw_text(surface, "UNDERPAID", self.game.fonts["large"], 55,
                   settings.ACCENT_COLOR)
-        draw_text(surface, "Cada jugador se mueve con el joystick de su mando",
+        draw_text(surface, "Movimiento: joystick izquierdo / WASD según tu entrada",
                   self.game.fonts["small"], 93, settings.MUTED_COLOR)
         for player in self.players.values():
             player.render(surface)
